@@ -270,11 +270,11 @@
   </style>
   <div class="card guru" style="margin-top:18px">
     <details>
-      <summary style="font-size:15px;font-weight:650;color:var(--txt)">🎯 三视角投资评判：好生意 · 好公司 · 好价格（巴菲特 / 芒格 / 段永平）　<span style="color:var(--muted);font-weight:400;font-size:12px">点击展开 ▾</span></summary>
+      <summary style="font-size:15px;font-weight:650;color:var(--txt)">🎯 四视角投资评判：好生意 · 好公司 · 好价格（巴菲特 / 段永平 / 彼得·林奇 / 霍华德·马克斯）　<span style="color:var(--muted);font-weight:400;font-size:12px">点击展开 ▾</span></summary>
       <div style="margin-top:14px">
-        <p class="lead">DCF 算的是「价格」便宜还是贵；三位大师更先问「这是不是一门<b>好生意</b>」。<b>便宜 ≠ 好投资</b>。① 先给三人通用判据框架；② 再按<b>当前加载股票</b>的实时数字做量化初筛（随股票更新）；③ 深度文字案例仅在加载对应股票时显示。</p>
+        <p class="lead">DCF 算的是「价格」便宜还是贵；这几位大师更先问「这是不是一门<b>好生意</b>」。<b>便宜 ≠ 好投资</b>。① 通用判据框架；② 按<b>当前股票</b>实时数字的量化初筛；③ 定性评分卡（AI 自动 / 手动）；④ <b>AI 四视角深度分析</b>（任意股票）。</p>
 
-        <h3>① 三人通用判据框架</h3>
+        <h3>① 四人通用判据框架</h3>
         <div class="tbl-wrap"><table>
           <thead><tr><th style="width:64px">投资人</th><th>好生意（生意质量）</th><th>好公司（管理/文化）</th><th>好价格</th></tr></thead>
           <tbody>
@@ -282,14 +282,18 @@
               <td>持久护城河保护<b>高 ROIC</b>；<b>定价权</b>（能不流失客户而涨价）；轻资本/低再投资；扣维护性 capex 后的 owner earnings 为正</td>
               <td>管理层诚实、把股东当合伙人；<b>低于内在价值才回购</b>；警惕“institutional imperative”乱扩张</td>
               <td>低于内在价值的安全边际；但<b>“合理价买伟大公司 ＞ 绝佳价买平庸公司”</b></td></tr>
-            <tr><td><b>芒格</b></td>
-              <td>可持续 <b>ROIC</b>（“40 年赚 6% vs 18%”尺子）；护城河；反过来想“什么会毁掉它”</td>
-              <td>“看激励定结果”；避免稀释股东与浪费性 capex</td>
-              <td>质量×价格<b>双轨</b>安全边际；便宜的平庸公司是“资本返还者”，不是复利机</td></tr>
             <tr><td><b>段永平</b></td>
               <td><b>商业模式</b>：差异化/用户粘性、非同质化、非重资本（“花很多钱却不见来钱＝差模式”）、看得懂 10 年</td>
               <td><b>企业文化</b>：本分、为股东着想、长期主义</td>
               <td>“安全边际＝你对公司有多懂”；好价格只对好生意才有意义；<b>不懂不做</b></td></tr>
+            <tr><td><b>彼得·林奇</b></td>
+              <td><b>成长</b>：业务简单、有增长空间、利基/被忽视行业；股票分六类（缓慢/稳健/快速成长/周期/困境反转/隐蔽资产）</td>
+              <td>内部人增持、回购、低负债；利基里的“小垄断”</td>
+              <td><b>PEG ≤ 1</b>（市盈率 ≤ 盈利增速）才算便宜；寻找 tenbagger</td></tr>
+            <tr><td><b>霍华德·马克斯</b></td>
+              <td>能扛<b>周期</b>、防御性、不易被永久损伤的生意</td>
+              <td>稳健、负债可控、抗冲击</td>
+              <td><b>二层思维</b>：价格相对内在价值与风险够便宜才买；周期/钟摆定位；<b>“买得好＞买好东西”</b></td></tr>
           </tbody>
         </table></div>
 
@@ -297,7 +301,7 @@
         <div id="guruDynamic"></div>
         <p style="color:var(--muted);font-size:11px;line-height:1.7;margin-top:8px"><b>量化只能初筛</b>「好价格」(估值) 与「好生意」里可量化的 <b>ROE/资本回报</b> 维度。<b>护城河、定价权、管理层资本配置、企业文化、商业模式差异化</b>等定性维度工具无法自动判断——请用下方 <b>③ 定性评分卡</b> 补充。<b>不构成投资建议。</b></p>
 
-        <h3>③ 定性评分卡 <span style="color:var(--muted);font-weight:400;font-size:11px">AI 联网研究自动打分（任意股票）/ 你也可手动覆盖 → 合并量化生成三视角结论、建议安全边际（按股票记忆）</span></h3>
+        <h3>③ 定性评分卡 <span style="color:var(--muted);font-weight:400;font-size:11px">AI 研究自动打分（任意股票）/ 你也可手动覆盖 → 合并量化生成四视角结论、建议安全边际（按股票记忆）</span></h3>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
           <button id="aiQualBtn" style="background:#8b5cf6;border:none;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600">🤖 AI 定性评分（联网研究当前股票）</button>
           <span id="aiQualStatus" style="font-size:12px;color:var(--muted)"></span>
@@ -305,7 +309,7 @@
         <div id="qualCard"></div>
         <div id="qualVerdict"></div>
 
-        <h3>④ AI 三视角深度分析：<span id="guruDeepName">—</span> <span style="color:var(--muted);font-weight:400;font-size:11px">（点上方「🤖 AI 定性评分」生成 · 任意股票）</span></h3>
+        <h3>④ AI 四视角深度分析：<span id="guruDeepName">—</span> <span style="color:var(--muted);font-weight:400;font-size:11px">（点上方「🤖 AI 定性评分」生成 · 任意股票）</span></h3>
         <div id="guruDeep"></div>
       </div>
     </details>
@@ -528,7 +532,7 @@ function updateQualVerdict(){
     '<tr><td><b>好公司定性</b></td><td>'+co+'/8 · <b style="color:'+coC+'">'+coLab+'</b></td></tr>'+
     '<tr><td><b>综合·好生意</b></td><td style="white-space:normal">'+combo+'</td></tr>'+
     '<tr><td><b>质量 → 建议MOS</b></td><td>'+sugMos+'%（当前 '+(S.mos||0).toFixed(0)+'%）<a onclick="adoptMos('+sugMos+')" style="color:var(--accent2);cursor:pointer;margin-left:8px">采用</a></td></tr>'+
-    '<tr><td colspan="2" style="color:var(--muted);font-size:11px;text-align:left;white-space:normal">三人侧重：巴菲特＝护城河+定价权+资本配置；芒格＝invert“什么会毁掉它”+ROE 6%vs18% 尺子；段永平＝商业模式差异化+企业文化。'+((S.qual&&S.qual._summary)?'<br>🤖 '+S.qual._summary:'')+'</td></tr>'+
+    '<tr><td colspan="2" style="color:var(--muted);font-size:11px;text-align:left;white-space:normal">四人侧重：巴菲特＝护城河+定价权；段永平＝商业模式差异化+企业文化；林奇＝成长+PEG；马克斯＝风险+价格相对价值。'+((S.qual&&S.qual._summary)?'<br>🤖 '+S.qual._summary:'')+'</td></tr>'+
     '</tbody></table></div>';
 }
 // ④ AI 三视角深度分析：渲染 S.qual._perspectives（按股票记忆）
@@ -536,13 +540,13 @@ function renderDeep(){
   const el=document.getElementById('guruDeep'); if(!el) return;
   const nmEl=document.getElementById('guruDeepName'); if(nmEl) nmEl.textContent=S.name||'—';
   const p=S.qual&&S.qual._perspectives;
-  if(!p||!p.buffett){ el.innerHTML='<p style="color:var(--muted);font-size:12.5px">点上方 <b>🤖 AI 定性评分</b>，AI 研究当前股票后给出巴菲特 / 芒格 / 段永平的「好生意 · 好公司 · 好价格 · 会买?」逐项判断与理由（任意股票）。</p>'; return; }
+  if(!p||!p.buffett){ el.innerHTML='<p style="color:var(--muted);font-size:12.5px">点上方 <b>🤖 AI 定性评分</b>，AI 研究当前股票后给出巴菲特 / 段永平 / 彼得·林奇 / 霍华德·马克斯的「好生意 · 好公司 · 好价格 · 会买?」逐项判断与理由（任意股票）。</p>'; return; }
   const cell=v=>{ const t=(v||'—'); const c=/不及格|平庸|✗|❌|不买|不够|差|弱|否/.test(t)?'v-no':(/⚠|存疑|一般|改善|勉强|打折|中性|不算|不作|归入/.test(t)?'v-mid':(/✓|会买|优|宽|强|好生意|划算/.test(t)?'v-ok':'')); return '<td class="'+c+'" style="white-space:normal">'+t+'</td>'; };
   const row=(name,o)=>'<tr><td style="width:56px"><b>'+name+'</b></td>'+cell(o&&o.goodBusiness)+cell(o&&o.goodCompany)+cell(o&&o.goodPrice)+cell(o&&o.willBuy)+'</tr>';
   const det=(name,o)=>(o&&o.reason)?'<details><summary>'+name+' · 逐项理由 ▾</summary><blockquote>'+o.reason+'</blockquote></details>':'';
   el.innerHTML='<div class="tbl-wrap"><table><thead><tr><th></th><th>好生意</th><th>好公司</th><th>好价格</th><th>会买?</th></tr></thead><tbody>'+
-    row('巴菲特',p.buffett)+row('芒格',p.munger)+row('段永平',p.duan)+'</tbody></table></div>'+
-    det('巴菲特',p.buffett)+det('芒格',p.munger)+det('段永平',p.duan)+
+    row('巴菲特',p.buffett)+row('段永平',p.duan)+row('彼得·林奇',p.lynch)+row('霍华德·马克斯',p.marks)+'</tbody></table></div>'+
+    det('巴菲特',p.buffett)+det('段永平',p.duan)+det('彼得·林奇',p.lynch)+det('霍华德·马克斯',p.marks)+
     (p.meaning?'<p class="lead" style="margin-top:12px"><b>对你意味着</b>：'+p.meaning+'</p>':'')+
     '<p style="color:var(--muted);font-size:11px;line-height:1.6;margin-top:8px">'+(p.caveat?'<b>诚实边界</b>：'+p.caveat+'　':'')+'🤖 AI 生成，仅供参考，<b>不构成投资建议</b>。</p>';
 }
@@ -551,7 +555,7 @@ const QUAL_API='';
 async function aiQualFetch(){
   const st=document.getElementById('aiQualStatus'), btn=document.getElementById('aiQualBtn');
   if(!baseValid()||!mktValid()){ st.style.color='var(--down)'; st.textContent='请先加载一只有效股票'; return; }
-  btn.disabled=true; st.style.color='var(--muted)'; st.textContent='🤖 AI 研究中…（评分 + 三视角深度分析，约 10–30 秒，请稍候）';
+  btn.disabled=true; st.style.color='var(--muted)'; st.textContent='🤖 AI 研究中…（评分 + 四视角深度分析，约 10–30 秒，请稍候）';
   try{
     const mc=S.price*S.shares, pe=(S.netprofit>0)?mc/S.netprofit:NaN, roe=(S.pb>0&&pe>0)?S.pb/pe*100:NaN;
     const body={ code:S.code, name:S.name, market:({A:'A股',HK:'港股',US:'美股'}[S.market]||S.market),
@@ -562,7 +566,7 @@ async function aiQualFetch(){
     QUAL_DIMS.forEach(d=>{ if(typeof s[d.id]==='number') S.qual[d.id]=Math.max(0,Math.min(2,Math.round(s[d.id]))); });
     S.qual._ai=true; S.qual._reasons=data.reasons||{}; S.qual._summary=data.summary||''; S.qual._perspectives=data.perspectives||null;
     saveQual(); syncQualCard(); updateQualVerdict(); renderDeep();
-    st.style.color='var(--up)'; st.textContent='✓ AI 已评分 + 三视角分析（'+S.name+'）— 可手动微调，结果已记忆';
+    st.style.color='var(--up)'; st.textContent='✓ AI 已评分 + 四视角分析（'+S.name+'）— 可手动微调，结果已记忆';
   }catch(err){
     st.style.color='var(--down)';
     st.innerHTML='✗ '+err.message+'　<span style="color:var(--muted)">后端未部署/不可用时，可手动拖动滑块打分。</span>';
