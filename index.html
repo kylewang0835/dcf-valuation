@@ -208,7 +208,7 @@
         <div class="hint">买入折扣。稳定股(低波动/高ROIC) ~20%；高波动成长股 40%+。建议买入价 = 内在价值×(1−MOS)</div>
       </div>
 
-      <button class="reset" id="reset">↺ 恢复青啤默认假设</button>
+      <button class="reset" id="reset">↺ 重置假设（保留当前股票）</button>
     </div>
 
     <!-- ===== Outputs ===== -->
@@ -404,11 +404,14 @@ document.getElementById('mDetail').addEventListener('click',()=>setMode('detail'
 document.getElementById('mSimple').addEventListener('click',()=>setMode('simple'));
 
 document.getElementById('reset').addEventListener('click',()=>{
-  S={...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36, qual:loadQual('600600')||defaultQual(), useYearly:false, growthYears:null};
+  // 只把"假设参数"还原成默认，保留当前已加载的股票数据
+  const keep=['code','name','market','price','shares','rev0','np0','netprofit','pb','netcash','qual'];
+  const k={}; keep.forEach(x=>k[x]=S[x]);
+  S={...DEFAULTS, ...k, useYearly:false, growthYears:null};
+  if(S.netprofit>0 && S.rev0>0) S.ebit=clamp(S.netprofit/(1-S.tax/100)/S.rev0*100,3,70);
   document.getElementById('useYearly').checked=false; document.getElementById('yearlyGrid').classList.add('hide');
-  document.getElementById('codeInput').value='600600';
-  setHeader(); syncAll(); syncQualCard(); setMode('detail');
-  document.getElementById('fetchStatus').textContent='已恢复青啤默认假设';
+  setHeader(); syncAll(); syncQualCard(); recalc();
+  document.getElementById('fetchStatus').textContent='已重置假设为默认（保留 '+S.name+'）';
 });
 
 function setHeader(){
