@@ -361,7 +361,7 @@ const DEFAULTS = {
   mos:25
 };
 function defaultQual(){ return {moat:1,pricing:1,model:1,light:1,mgmt:1,capital:1,culture:1,minority:1}; }
-let S = {...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36, qual:defaultQual(), useYearly:false, growthYears:null};
+let S = {...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36, qual:defaultQual(), useYearly:false, growthYears:null, netcashEst:null};
 let MODE = 'detail';
 
 const cur = ()=>CUR[S.market]||CUR.A;
@@ -405,7 +405,7 @@ document.getElementById('mSimple').addEventListener('click',()=>setMode('simple'
 
 document.getElementById('reset').addEventListener('click',()=>{
   // 只把"假设参数"还原成默认，保留当前已加载的股票数据
-  const keep=['code','name','market','price','shares','rev0','np0','netprofit','pb','netcash','qual'];
+  const keep=['code','name','market','price','shares','rev0','np0','netprofit','pb','netcash','netcashEst','qual'];
   const k={}; keep.forEach(x=>k[x]=S[x]);
   S={...DEFAULTS, ...k, useYearly:false, growthYears:null};
   if(S.netprofit>0 && S.rev0>0) S.ebit=clamp(S.netprofit/(1-S.tax/100)/S.rev0*100,3,70);
@@ -491,10 +491,12 @@ function impliedGrowth(){
 }
 function updateNetcashHint(){
   const hn=document.getElementById('hintNetcash'); if(!hn) return;
-  if(!S.netcash){
-    hn.innerHTML='⚠ <span style="color:var(--warn)">当前按 净现金 = 0 计算</span>。现金充裕的公司（电信 / 白酒 / 互联网）会被<b>系统性低估</b>——请务必按年报填入「现金及等价物 + 金融资产 − 有息负债」。';
+  if(S.netcash){
+    hn.innerHTML='已计入净现金 '+big(S.netcash)+'（'+(S.netcash>0?'净现金':'净负债')+'，<b>自动估算自资产负债表</b>，可改）。';
+  }else if(S.netcashEst!=null){
+    hn.innerHTML='估算净现金约 <b>'+big(S.netcashEst)+'</b>（自资产负债表，粗略口径）。<span style="color:var(--warn)">净利模式下基准净利已含利息收入，故未自动计入以免重复计算</span>；如要做 SOTP，请改用经营净利做基准后再手填此值。';
   }else{
-    hn.innerHTML='已计入净现金 '+big(S.netcash)+'（'+(S.netcash>0?'净现金':'净负债')+'）。接口不提供，请核对年报。';
+    hn.innerHTML='⚠ <span style="color:var(--warn)">当前按 净现金 = 0 计算</span>。请按年报填入「现金及等价物 + 金融资产 − 有息负债」。';
   }
 }
 
@@ -623,9 +625,11 @@ function renderGuru(){
   else if(upside<-15){ prC='v-no'; prT='✗ 偏贵（'+upside.toFixed(0)+'%；PE '+peTxt+pbTxt+'）'; }
   else { prC='v-mid'; prT='~ 大致合理（'+(upside>=0?'+':'')+upside.toFixed(0)+'%；PE '+peTxt+pbTxt+'）'; }
   let coC,coT;
-  if(S.netcash>0){ coC='v-ok'; coT='✓ 净现金为正（'+big(S.netcash)+'）—— 资本配置/管理层/文化仍需你定性'; }
-  else if(S.netcash<0){ coC='v-mid'; coT='~ 净负债（'+big(S.netcash)+'）—— 杠杆/管理层/文化需定性'; }
-  else { coC='v-mid'; coT='~ 净现金未填 —— 管理层/资本配置/文化需定性'; }
+  const ncShown = S.netcash ? S.netcash : (S.netcashEst!=null ? S.netcashEst : null);
+  const ncEstFlag = (!S.netcash && S.netcashEst!=null) ? '，估算' : '';
+  if(ncShown>0){ coC='v-ok'; coT='✓ 净现金为正（约'+big(ncShown)+ncEstFlag+'）—— 资本配置/管理层/文化需定性'; }
+  else if(ncShown<0){ coC='v-mid'; coT='~ 净负债（约'+big(ncShown)+ncEstFlag+'）—— 杠杆/管理层/文化需定性'; }
+  else { coC='v-mid'; coT='~ 净现金未取到 —— 管理层/资本配置/文化需定性'; }
   let synth;
   if(isNaN(roe)) synth='缺 ROE 数据，仅能判断「好价格」；「好生意」需补 ROE 与定性研究。';
   else if(roe<8) synth='量化画像：<b>低资本回报</b> + '+(upside>15?'<b>便宜</b>':(upside<-15?'估值偏贵':'估值合理'))+' → 像“便宜的平庸生意”，三人都会先质疑“是不是好生意”（参见联通案例）。';
@@ -845,6 +849,38 @@ async function txQuote(market,code){
   return {price, shares:mktcapM/price, mktcapM, peTTM:pe>0?pe:0, pb, name:/[一-龥A-Za-z]/.test(nm)?nm:'', source:'腾讯'};
 }
 
+// 自动估算净现金（资产负债表）：现金类 − 有息负债。返回 {netcashM(百万,交易币种), period}
+async function fetchNetCash(market, code){
+  const num=x=>{ const v=+x; return isFinite(v)?v:0; };
+  try{
+    if(market==='A'){
+      const suf=/^(6|9)/.test(code)?'SH':'SZ';
+      const r=await jsonp('https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_GBALANCE'+
+        '&columns=REPORT_DATE,MONETARYFUNDS,TRADE_FINASSET,SHORT_LOAN,LONG_LOAN,BOND_PAYABLE,SHORT_BOND_PAYABLE,NONCURRENT_LIAB_1YEAR,LEASE_LIAB'+
+        '&filter=(SECUCODE%3D%22'+code+'.'+suf+'%22)&pageSize=1&sortColumns=REPORT_DATE&sortTypes=-1','callback');
+      const d=((r&&r.result&&r.result.data)||[])[0]; if(!d) return null;
+      const cash=num(d.MONETARYFUNDS)+num(d.TRADE_FINASSET);
+      const debt=num(d.SHORT_LOAN)+num(d.LONG_LOAN)+num(d.BOND_PAYABLE)+num(d.SHORT_BOND_PAYABLE)+num(d.NONCURRENT_LIAB_1YEAR)+num(d.LEASE_LIAB);
+      return { netcashM:(cash-debt)/1e6, period:(d.REPORT_DATE||'').slice(0,10) };
+    }
+    if(market==='HK'){
+      const r=await jsonp('https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_HKF10_FN_BALANCE'+
+        '&columns=REPORT_DATE,ITEM_NAME,AMOUNT,CURRENCY&filter=(SECUCODE%3D%22'+code.padStart(5,'0')+'.HK%22)'+
+        '&pageSize=90&sortColumns=REPORT_DATE&sortTypes=-1','callback');
+      const rows=(r&&r.result&&r.result.data)||[]; if(!rows.length) return null;
+      const d0=rows[0].REPORT_DATE, curc=rows[0].CURRENCY||'';
+      let cash=0, debt=0;
+      rows.filter(x=>x.REPORT_DATE===d0).forEach(x=>{ const nm=x.ITEM_NAME||'', a=num(x.AMOUNT);
+        if(/现金|存款|货币/.test(nm) && !/受限/.test(nm)) cash+=a;            // 现金类（剔除受限）
+        if(/借款|贷款|应付债券|应付票据|融资租赁/.test(nm)) debt+=a;          // 有息负债
+      });
+      const fx=/人民币|CNY|RMB/.test(curc)?1.08:1;   // 报表币种(常为人民币)→港元，模型按港元
+      return { netcashM:(cash-debt)/1e6*fx, period:(d0||'').slice(0,10) };
+    }
+  }catch(e){}
+  return null; // 美股暂不支持自动
+}
+
 async function fetchData(){
   const input=document.getElementById('codeInput').value.trim();
   const st=document.getElementById('fetchStatus'), btn=document.getElementById('fetchBtn');
@@ -889,17 +925,21 @@ async function fetchData(){
       }catch(e){}
     }
     if(!detail) S.rev0=NaN;     // 非详细模式：清除营收，杜绝跨公司污染
-    S.netcash=0;
+    // 自动估算净现金：详细模式(FCFF)直接计入；净利模式(FCFE)基准净利已含利息收入→只存为参考、不自动计入(避免重复计算)
+    S.netcashEst=null; S.netcash=0;
+    try{ const nc=await fetchNetCash(S.market, S.code); if(nc && isFinite(nc.netcashM)){ S.netcashEst=nc.netcashM; if(detail) S.netcash=nc.netcashM; } }catch(e){}
     setHeader(); syncAll(); setMode(detail?'detail':'simple');
 
     const when=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
     const mk={A:'A股',HK:'港股',US:'美股'}[S.market];
     const srcTag = Q.source==='腾讯' ? ' · <span style="color:var(--accent2)">数据源:腾讯(备用)</span>' : '';
+    const ncTag = S.netcash ? ' · 净现金 '+big(S.netcash)+'（已计入）' : (S.netcashEst!=null ? ' · 净现金估 '+big(S.netcashEst)+'（参考·见左）' : '');
+    const manualWarn = (S.netcashEst!=null) ? '⚠ 增长率/折旧/资本开支 请自行设定' : '⚠ 增长率/折旧/资本开支/净现金 请自行设定或手填';
     if(baseValid()){
       st.style.color='var(--up)';
       st.innerHTML='✓ '+S.name+' '+S.code+'（'+mk+'/'+cur().code+'） · 价 '+S.price.toFixed(2)+' '+cur().sym+
-        ' · 归母 '+(S.netprofit>0?big(S.netprofit):'—')+extra+srcTag+' · '+when+
-        ' &nbsp;<span style="color:var(--warn)">⚠ 增长率/折旧/资本开支/净现金 请自行设定或手填</span>';
+        ' · 归母 '+(S.netprofit>0?big(S.netprofit):'—')+extra+ncTag+srcTag+' · '+when+
+        ' &nbsp;<span style="color:var(--warn)">'+manualWarn+'</span>';
     }else{
       st.style.color='var(--warn)';
       st.innerHTML='⚠ 已取行情：'+S.name+' '+S.code+' 价 '+S.price.toFixed(2)+' '+cur().sym+srcTag+
