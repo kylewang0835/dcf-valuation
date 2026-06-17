@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>股票 DCF 估值模型 · A股/港股/美股</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2a3240;
+    --txt:#e6edf3; --muted:#8b9bb0; --accent:#2f9e44; --accent2:#3b82f6;
+    --up:#22c55e; --down:#ef4444; --warn:#f59e0b; --green:#1f6f3a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5}
+  .wrap{max-width:1280px;margin:0 auto;padding:24px}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:16px}
+  header h1{font-size:22px;margin:0;font-weight:650}
+  header .sub{color:var(--muted);font-size:13px}
+  .pill{background:var(--green);color:#d6ffe0;padding:2px 10px;border-radius:999px;font-size:12px}
+
+  .fetchbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 16px;margin-bottom:14px}
+  .fetchbar input#codeInput{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+       border-radius:8px;padding:8px 12px;font-size:15px;width:150px;letter-spacing:1px}
+  .fetchbar button{background:var(--accent2);border:none;color:#fff;border-radius:8px;padding:9px 16px;cursor:pointer;font-size:13px;font-weight:600}
+  .fetchbar button:hover{filter:brightness(1.1)}
+  .fetchbar button:disabled{opacity:.5;cursor:default}
+  .fetchbar .status{font-size:12.5px;color:var(--muted)}
+  .fetchbar .examples{font-size:11.5px;color:var(--muted);margin-left:auto}
+
+  /* mode toggle */
+  .modebar{display:flex;gap:0;margin-bottom:18px;border:1px solid var(--line);border-radius:9px;overflow:hidden;width:fit-content}
+  .modebar button{background:var(--panel);border:none;color:var(--muted);padding:9px 18px;cursor:pointer;font-size:13px;font-weight:600}
+  .modebar button.on{background:var(--accent2);color:#fff}
+
+  .layout{display:grid;grid-template-columns:340px 1fr;gap:20px}
+  @media(max-width:920px){.layout{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .card h2{font-size:14px;margin:0 0 14px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+  .ctrl{margin-bottom:15px}
+  .ctrl .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;gap:8px}
+  .ctrl label{font-size:13px;color:var(--txt)}
+  .ctrl .val{font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent2);background:var(--panel2);
+             border:1px solid var(--line);border-radius:6px;padding:1px 7px;min-width:64px;text-align:right}
+  .ctrl input[type=range]{width:100%;accent-color:var(--accent2);cursor:pointer;margin:0}
+  .ctrl .numinp{font-variant-numeric:tabular-nums;font-weight:600;color:#e6edf3;background:var(--panel2);
+             border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:120px;text-align:right;font-size:13px}
+  .ctrl .numinp:focus{outline:1px solid var(--accent2)}
+  .ctrl .hint{font-size:11px;color:var(--muted);margin-top:3px}
+  .group-title{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin:18px 0 10px;font-weight:700}
+  .group-title:first-child{margin-top:0}
+  .fetched{color:var(--warn)}
+  .hide{display:none !important}
+
+  .hero{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  @media(max-width:720px){.hero{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .kpi .k{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .kpi .v{font-size:25px;font-weight:700;font-variant-numeric:tabular-nums}
+  .kpi .v small{font-size:13px;font-weight:500;color:var(--muted)}
+  .verdict{border-radius:12px;padding:16px 18px;margin-bottom:20px;font-size:15px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .verdict .badge{font-size:20px;font-weight:800;padding:4px 14px;border-radius:8px}
+
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line);font-size:12.5px}
+  th{color:var(--muted);font-weight:600}
+  td:first-child,th:first-child{text-align:left}
+  .tbl-wrap{overflow-x:auto}
+  tfoot td{font-weight:700;border-top:2px solid var(--line);border-bottom:none}
+
+  .sens td,.sens th{text-align:center;padding:8px 6px;border:1px solid var(--line)}
+  .sens .axis{color:var(--muted);font-weight:600}
+  .sens .cell{font-weight:600}
+  .legend{font-size:11px;color:var(--muted);margin-top:8px}
+  .swatch{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:middle;margin:0 3px 0 10px}
+
+  .ev-bar{display:flex;height:30px;border-radius:7px;overflow:hidden;margin:10px 0 6px;border:1px solid var(--line)}
+  .ev-bar div{display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;white-space:nowrap;overflow:hidden}
+  .footnote{color:var(--muted);font-size:11.5px;line-height:1.7;margin-top:14px}
+  .footnote a{color:var(--accent2)}
+  .reset{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:7px 12px;cursor:pointer;font-size:12px;width:100%;margin-top:6px}
+  .reset:hover{border-color:var(--accent2)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:920px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span id="coName">青岛啤酒</span> DCF 估值模型</h1>
+    <span class="pill" id="tickerPill">600600.SH</span>
+    <span class="sub">A股 / 港股 / 美股 · FCFF·FCFE 折现 · 数据来自东方财富 · 实时重算</span>
+  </header>
+
+  <div class="fetchbar card">
+    <span>代码/名称</span>
+    <input id="codeInput" value="600600" maxlength="12" placeholder="600600 / 00700 / AAPL">
+    <button id="fetchBtn">⟳ 抓取实时数据</button>
+    <span class="status" id="fetchStatus">A股代码如 600600；港股 00700；美股 AAPL。回车或点按钮</span>
+    <span class="examples">青啤 600600 · 腾讯 00700 · 苹果 AAPL · 茅台 600519 · 青啤H 00168</span>
+  </div>
+
+  <div class="modebar">
+    <button id="mDetail" class="on">营收驱动 · 详细（A股）</button>
+    <button id="mSimple">净利驱动 · 通用（A/港/美）</button>
+  </div>
+
+  <div class="verdict" id="verdict"></div>
+
+  <div class="hero">
+    <div class="kpi"><div class="k">每股内在价值</div><div class="v" id="kpiFair">–</div></div>
+    <div class="kpi"><div class="k">当前股价</div><div class="v" id="kpiPrice">–</div></div>
+    <div class="kpi"><div class="k">潜在空间</div><div class="v" id="kpiUpside">–</div></div>
+    <div class="kpi"><div class="k">隐含市值 / 当前市值</div><div class="v" id="kpiMcap">–</div></div>
+  </div>
+
+  <div class="layout">
+    <!-- ===== Inputs ===== -->
+    <div class="card">
+      <h2>假设参数</h2>
+
+      <!-- ---- detailed (revenue) panel ---- -->
+      <div id="panelDetail">
+        <div class="group-title">基准数据 <span style="color:var(--muted);text-transform:none;letter-spacing:0">（抓取自动填充）</span></div>
+        <div class="ctrl num" data-id="rev0" data-fmt="int">
+          <div class="row"><label>基准营收 (最新年报, 百万本币)</label><input class="numinp" type="number" step="1"></div>
+        </div>
+        <div class="group-title">增长</div>
+        <div class="ctrl" data-min="-10" data-max="20" data-step="0.5" data-id="g1" data-fmt="pct">
+          <div class="row"><label>前 5 年营收增速</label><span class="val"></span></div><input type="range">
+        </div>
+        <div class="ctrl" data-min="-8" data-max="12" data-step="0.5" data-id="g2" data-fmt="pct">
+          <div class="row"><label>第 6–10 年营收增速</label><span class="val"></span></div><input type="range">
+        </div>
+        <div class="group-title">盈利 & 现金转换</div>
+        <div class="ctrl" data-min="3" data-max="70" data-step="0.5" data-id="ebit" data-fmt="pct">
+          <div class="row"><label>营业利润率 (EBIT margin)</label><span class="val"></span></div><input type="range">
+          <div class="hint">抓取时按 归母净利 ÷ (1−税率) ÷ 营收 自动估算，可手调</div>
+        </div>
+        <div class="ctrl" data-min="0" data-max="35" data-step="0.5" data-id="tax" data-fmt="pct">
+          <div class="row"><label>所得税率</label><span class="val"></span></div><input type="range">
+        </div>
+        <div class="ctrl" data-min="1" data-max="15" data-step="0.1" data-id="da" data-fmt="pct">
+          <div class="row"><label>折旧摊销 / 营收 <span class="fetched">✱</span></label><span class="val"></span></div><input type="range">
+        </div>
+        <div class="ctrl" data-min="1" data-max="25" data-step="0.1" data-id="capex" data-fmt="pct">
+          <div class="row"><label>资本开支 / 营收 <span class="fetched">✱</span></label><span class="val"></span></div><input type="range">
+        </div>
+        <div class="ctrl" data-min="-10" data-max="20" data-step="0.5" data-id="nwc" data-fmt="pct">
+          <div class="row"><label>营运资本变动 / 营收增量</label><span class="val"></span></div><input type="range">
+        </div>
+      </div>
+
+      <!-- ---- simple (net profit) panel ---- -->
+      <div id="panelSimple" class="hide">
+        <div class="group-title">基准数据 <span style="color:var(--muted);text-transform:none;letter-spacing:0">（抓取自动填充）</span></div>
+        <div class="ctrl num" data-id="np0" data-fmt="int">
+          <div class="row"><label>基准归母净利 (TTM, 百万本币)</label><input class="numinp" type="number" step="1"></div>
+          <div class="hint">抓取时 = 总市值 ÷ PE(TTM)，自动按交易货币计</div>
+        </div>
+        <div class="group-title">增长</div>
+        <div class="ctrl" data-min="-15" data-max="40" data-step="0.5" data-id="npg1" data-fmt="pct">
+          <div class="row"><label>前 5 年净利增速</label><span class="val"></span></div><input type="range">
+        </div>
+        <div class="ctrl" data-min="-10" data-max="25" data-step="0.5" data-id="npg2" data-fmt="pct">
+          <div class="row"><label>第 6–10 年净利增速</label><span class="val"></span></div><input type="range">
+        </div>
+        <div class="group-title">现金转换</div>
+        <div class="ctrl" data-min="40" data-max="130" data-step="1" data-id="fcfconv" data-fmt="pct">
+          <div class="row"><label>自由现金流 / 净利 转换率</label><span class="val"></span></div><input type="range">
+          <div class="hint">净利→股东自由现金流的折算。成熟轻资产≈90–100%；扩张/重资产更低</div>
+        </div>
+      </div>
+
+      <!-- ---- shared ---- -->
+      <div class="group-title">折现 & 终值</div>
+      <div class="ctrl" data-min="4" data-max="18" data-step="0.1" data-id="wacc" data-fmt="pct">
+        <div class="row"><label id="lblWacc">WACC (折现率)</label><span class="val"></span></div><input type="range">
+      </div>
+      <div class="ctrl" data-min="0" data-max="6" data-step="0.1" data-id="gt" data-fmt="pct">
+        <div class="row"><label>永续增长率</label><span class="val"></span></div><input type="range">
+      </div>
+
+      <div class="group-title">净现金 & 股本</div>
+      <div class="ctrl num" data-id="netcash" data-fmt="int">
+        <div class="row"><label>净现金 (百万本币) <span class="fetched">✱</span></label><input class="numinp" type="number" step="100"></div>
+        <div class="hint" id="hintNetcash">接口无法获取，请按年报手填；可为负（净负债）</div>
+      </div>
+      <div class="ctrl num" data-id="shares" data-fmt="int">
+        <div class="row"><label>总股本 (百万股)</label><input class="numinp" type="number" step="0.01"></div>
+      </div>
+      <div class="ctrl num" data-id="price" data-fmt="px">
+        <div class="row"><label>当前股价 (本币)</label><input class="numinp" type="number" step="0.01"></div>
+      </div>
+
+      <div class="group-title">决策 · 安全边际</div>
+      <div class="ctrl" data-min="0" data-max="60" data-step="1" data-id="mos" data-fmt="pct">
+        <div class="row"><label>安全边际 (MOS)</label><span class="val"></span></div>
+        <input type="range">
+        <div class="hint">买入折扣。稳定股(低波动/高ROIC) ~20%；高波动成长股 40%+。建议买入价 = 内在价值×(1−MOS)</div>
+      </div>
+
+      <button class="reset" id="reset">↺ 恢复青啤默认假设</button>
+    </div>
+
+    <!-- ===== Outputs ===== -->
+    <div>
+      <div class="card" style="margin-bottom:20px">
+        <h2>价值拆解</h2>
+        <div class="ev-bar" id="evBar"></div>
+        <div class="legend">
+          <span class="swatch" style="background:#3b82f6"></span><span id="lgPV">显式期现值</span>
+          <span class="swatch" style="background:#8b5cf6"></span>终值现值
+          <span class="swatch" style="background:#22c55e"></span>净现金
+        </div>
+        <table style="margin-top:14px"><tbody id="evTable"></tbody></table>
+      </div>
+
+      <div class="card" style="margin-bottom:20px">
+        <h2 id="projTitle">10 年自由现金流预测 (百万本币)</h2>
+        <div class="tbl-wrap"><table id="projTable"></table></div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h2>敏感性：每股价值 (WACC × 永续增速)</h2>
+          <div class="tbl-wrap"><table class="sens" id="sensTable"></table></div>
+          <div class="legend">绿色＝高于当前股价（低估），红色＝低于当前股价（高估）</div>
+        </div>
+        <div class="card">
+          <h2>关键产出</h2>
+          <table id="metaTable"></table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <h2>说明</h2>
+        <div class="footnote">
+          <b>两种模式</b>：① 营收驱动（FCFF）= EBIT×(1−税率)+折旧−资本开支−营运资本变动，按 WACC 折现后 +净现金；适合 A 股（营收可自动获取）。
+          ② 净利驱动（FCFE）= 归母净利×增长×(FCF/净利转换率)，按 WACC（视作股权成本）折现直接得股权价值；A/港/美通用，基准净利 = 总市值÷PE(TTM)，自动按交易货币计。<br>
+          <b>多市场</b>：输入代码/名称后用东方财富搜索接口解析市场与 secid；A 股人民币、港股港元、美股美元，估值与股价同币种，结果即该币种每股价值。<br>
+          <b>需手填项</b>（标 <span class="fetched">✱</span>）：折旧摊销、资本开支、净现金——接口无法稳定获取，请按目标公司最新年报核对。<br>
+          <b>重复计算提示</b>：净利驱动模式下基准净利已含利息/投资收益，若再单独填正的净现金会重复计算，故默认 0。<br>
+          仅供分析与教学，<b>不构成投资建议</b>。DCF 对 WACC 与永续增速高度敏感，请结合敏感性矩阵综合判断。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 三视角投资评判 ===== -->
+  <style>
+    .guru h3{font-size:13px;color:var(--accent);margin:18px 0 8px;font-weight:700}
+    .guru td,.guru th{text-align:left;vertical-align:top;font-size:12.5px}
+    .guru .v-no{color:#ef4444;font-weight:700}
+    .guru .v-mid{color:#f59e0b;font-weight:700}
+    .guru .v-ok{color:#22c55e;font-weight:700}
+    .guru details{margin:6px 0}
+    .guru summary{cursor:pointer;color:var(--accent2);font-size:13px;font-weight:600;padding:5px 0}
+    .guru blockquote{border-left:3px solid var(--line);margin:7px 0;padding:2px 0 2px 12px;color:var(--muted);font-size:12px;line-height:1.6}
+    .guru .lead{color:var(--muted);font-size:12.5px;line-height:1.7}
+    .guru .key{background:rgba(239,68,68,.10);border:1px solid #ef4444;border-radius:8px;padding:10px 12px;margin:10px 0;font-size:12.5px}
+  </style>
+  <div class="card guru" style="margin-top:18px">
+    <details>
+      <summary style="font-size:15px;font-weight:650;color:var(--txt)">🎯 三视角投资评判：好生意 · 好公司 · 好价格（巴菲特 / 芒格 / 段永平）　<span style="color:var(--muted);font-weight:400;font-size:12px">点击展开 ▾</span></summary>
+      <div style="margin-top:14px">
+        <p class="lead">DCF 算的是「价格」便宜还是贵；三位大师更先问「这是不是一门<b>好生意</b>」。<b>便宜 ≠ 好投资</b>。① 先给三人通用判据框架；② 再按<b>当前加载股票</b>的实时数字做量化初筛（随股票更新）；③ 深度文字案例仅在加载对应股票时显示。</p>
+
+        <h3>① 三人通用判据框架</h3>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th style="width:64px">投资人</th><th>好生意（生意质量）</th><th>好公司（管理/文化）</th><th>好价格</th></tr></thead>
+          <tbody>
+            <tr><td><b>巴菲特</b></td>
+              <td>持久护城河保护<b>高 ROIC</b>；<b>定价权</b>（能不流失客户而涨价）；轻资本/低再投资；扣维护性 capex 后的 owner earnings 为正</td>
+              <td>管理层诚实、把股东当合伙人；<b>低于内在价值才回购</b>；警惕“institutional imperative”乱扩张</td>
+              <td>低于内在价值的安全边际；但<b>“合理价买伟大公司 ＞ 绝佳价买平庸公司”</b></td></tr>
+            <tr><td><b>芒格</b></td>
+              <td>可持续 <b>ROIC</b>（“40 年赚 6% vs 18%”尺子）；护城河；反过来想“什么会毁掉它”</td>
+              <td>“看激励定结果”；避免稀释股东与浪费性 capex</td>
+              <td>质量×价格<b>双轨</b>安全边际；便宜的平庸公司是“资本返还者”，不是复利机</td></tr>
+            <tr><td><b>段永平</b></td>
+              <td><b>商业模式</b>：差异化/用户粘性、非同质化、非重资本（“花很多钱却不见来钱＝差模式”）、看得懂 10 年</td>
+              <td><b>企业文化</b>：本分、为股东着想、长期主义</td>
+              <td>“安全边际＝你对公司有多懂”；好价格只对好生意才有意义；<b>不懂不做</b></td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>② 本股票量化初筛：<span id="guruStockName">—</span> <span style="color:var(--muted);font-weight:400;font-size:11px">随加载股票实时更新</span></h3>
+        <div id="guruDynamic"></div>
+        <p style="color:var(--muted);font-size:11px;line-height:1.7;margin-top:8px"><b>量化只能初筛</b>「好价格」(估值) 与「好生意」里可量化的 <b>ROE/资本回报</b> 维度。<b>护城河、定价权、管理层资本配置、企业文化、商业模式差异化</b>等定性维度工具无法自动判断——需你补充，或像下面联通那样做深度研究。<b>不构成投资建议。</b></p>
+
+        <div id="guruCaseUnicom" style="display:none">
+        <h3>③ 深度研究案例：中国联通 0762.HK <span style="color:var(--muted);font-weight:400;font-size:11px">（仅加载联通 00762 时显示）</span></h3>
+        <div class="key">核心命门只有一个数字：<b>ROIC ≈ 4.3% ＜ 资本成本 ≈ 6%</b> —— 每投一块钱在毁灭经济价值；ROE ≈ 6%，三强最弱（移动 8.3% ＞ 电信 7.3% ＞ 联通 5.8%）。这正是它十年困在 PB≈0.5、被当作“价值陷阱”的根因。</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th style="width:60px"></th><th>好生意</th><th>好公司</th><th>好价格</th><th>会买?</th></tr></thead>
+          <tbody>
+            <tr><td><b>巴菲特</b></td><td class="v-no">❌ 明确不及格</td><td class="v-mid">⚠️ 改善中的“好股东回报者”</td><td>便宜有安全边际，但不足以买</td><td class="v-no">大概率不买</td></tr>
+            <tr><td><b>芒格</b></td><td class="v-no">❌ 三强最弱的平庸生意</td><td class="v-mid">⚠️ 勉强算好股东，治理打折</td><td>便宜＝<b>理性折价</b>非错杀</td><td class="v-no">不作复利核心仓</td></tr>
+            <tr><td><b>段永平</b></td><td class="v-no">❌（框架推断）</td><td class="v-mid">⚠️ 好分红者，差异化基因弱</td><td>客观便宜，但对他不算好价格</td><td class="v-no">归入“不懂不做”</td></tr>
+          </tbody>
+        </table></div>
+
+        <details><summary>巴菲特 · 逐项理由 ▾</summary>
+          <blockquote><b>好生意 ❌</b>：踩满他最反感的资本密集同质化特征。ROIC 4.3%＜WACC，违反“伟大生意须有护城河<b>保护卓越的资本回报</b>”（2007 信原话）；无定价权——服务同质化＋“提速降费”封顶资费，过不了他“评估生意最重要的一条：<b>能否不流失客户而涨价</b>”的测试；D&amp;A 808 亿 ≫ 净利 208 亿，正是他 1986 年信抨击的“资本密集行业里加回折旧却不扣维护性 capex 的现金流是欺骗性的”，归为 <b>gruesome（航空/纺织那一类）</b>。唯一一次碰电信（Verizon，2020 建仓~$59、2022 清仓~$53 亏损）是零利率下的债券替代品。</blockquote>
+          <blockquote><b>好公司 ⚠️</b>：近两年资本配置确有真进步——砍 capex、派息率提到 ~61%、FCF +28.5%、近零杠杆、净现金，符合他“再投资回报差就该把钱还股东”。但 <b>PB 0.53 深低于内在价值却零回购</b>（本是回购黄金窗口）＋长期低 ROIC 投资史 → 够不上“好公司”。</blockquote>
+          <blockquote><b>好价格</b>：静态便宜（PE ~9.4、PB 0.53、息率 6.4%），但他的铁律<b>“合理价买伟大公司 ＞ 绝佳价买平庸公司”</b>直接否决——0.5 倍 PB 是对低于资本成本生意的理性折价，不是错杀。顶多是个可拿 6.4% 股息的现金牛，不是 compounding 标的。</blockquote>
+        </details>
+        <details><summary>芒格 · 逐项理由 ▾</summary>
+          <blockquote>用他 1994 USC 那把最硬的尺子：“<b>一门生意 40 年只赚 6% 资本回报，你持有 40 年最终也就 ~6%，买得再便宜也没用；若能赚 18%，买贵点结果也惊人。</b>”联通就在“6%”那一端。</blockquote>
+          <blockquote><b>好生意 ❌</b>；<b>好公司 ⚠️</b>（资本纪律改善是真多头论点，但 SOE 激励错位——“Show me the incentive”——考核偏向规模/政策而非每股 ROIC，且零回购）；<b>好价格</b>：便宜是“对平庸生意的合理折价”非错杀。他会拿 <b>阿里巴巴（“我一生最糟错误之一”）</b> 提醒：便宜＋中国/SOE 折价 ≠ 安全。</blockquote>
+          <blockquote>净判：像他能容忍的受监管重资本生意（类比 BNSF/公用事业，按“沉没资本回报的安全性”判）——可作吃 6.4% 股息的债券替代品，<b>绝非 BYD 那样的复利核心仓</b>。</blockquote>
+        </details>
+        <details><summary>段永平 · 逐项理由 ▾</summary>
+          <blockquote><b>前提（已核实）</b>：段永平从未公开评论过任何运营商/移动/电信/联通——以下全是按其公开框架的<b>推断</b>，非他原话。</blockquote>
+          <blockquote><b>好生意 ❌</b>：撞中他厌恶的每一条——<b>同质化</b>（他原话：差异化才是护城河；并用航空业“只比从 a 到 b 的成本”打比方，运营商正是范本）、<b>重资本</b>（“花很多钱却不见来钱是差的商业模式”）、ROIC＜资本成本、强监管（他自述“看不懂银行这类强监管重资本生意就不碰”）。</blockquote>
+          <blockquote><b>好公司 ⚠️</b>：他重仓<b>茅台（也是国企）</b>，认可国企“规矩不太有人敢改”的稳定；但茅台过关靠“53 度飞天不要变”的<b>产品独占力</b>，联通没有这种差异化基因，且零回购。</blockquote>
+          <blockquote><b>好价格</b>：他确实用<b>股息/现金流而非 PE</b> 给茅台估值（“放茅台肯定比放银行好”），联通 6.4% 息率本可入眼——但决定性判据是“<b>安全边际＝你对公司有多懂</b>”“好价格只对好生意才有意义”。生意没过第一关 → 便宜救不了差生意，大概率进他的<b>“不为清单”</b>。</blockquote>
+        </details>
+
+        <p class="lead" style="margin-top:14px"><b>对你意味着</b>：想要确定性的 6%+ 股息票/债券替代品 → 联通够格（净现金、低杠杆、派息纪律改善，DCF 也给 +35~45% 修复空间）；<b>想要长期复利 → 不够格</b>（ROIC 低于资本成本是结构性的，PB 0.5 “便宜得有道理”）。前面 DCF 的 “+105% 低估” 在三人眼里是<b>陷阱式信号</b>：先问“是不是好生意”，联通在第一关就被刷掉。</p>
+        <p style="color:var(--muted);font-size:11px;line-height:1.6;margin-top:10px"><b>诚实边界</b>：对段永平为框架推断（他从未评论运营商）；巴菲特无关于国企的成文判据、芒格无关于中国电信 SOE 治理的可核实原话，涉及 SOE 治理的打分均为按其“激励/反过来想”镜头的推断，已据实标注。本板块为教学性质，<b>不构成投资建议</b>。</p>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<script>
+// ---------- currency ----------
+const CUR = {
+  A :{sym:'元',  big:'亿',  div:100,  code:'CNY'},   // 百万 → 亿
+  HK:{sym:'港元',big:'亿',  div:100,  code:'HKD'},
+  US:{sym:'美元',big:'十亿',div:1000, code:'USD'}    // 百万 → 十亿
+};
+
+const DEFAULTS = {
+  // detailed
+  rev0:32473, g1:4, g2:2.5, ebit:17, tax:25, da:3.8, capex:6, nwc:0,
+  // simple
+  np0:4588, npg1:6, npg2:3, fcfconv:95,
+  // shared
+  wacc:8.5, gt:2.5, netcash:20000, shares:1364, price:56.12,
+  // 决策
+  mos:25
+};
+let S = {...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36};
+let MODE = 'detail';
+
+const cur = ()=>CUR[S.market]||CUR.A;
+const fmt = {
+  int:v=>Math.round(v).toLocaleString('en-US'),
+  pct:v=>(+v).toFixed(1)+'%',
+  px:v=>(+v).toFixed(2)+' '+cur().sym
+};
+const big = v => (v/cur().div).toLocaleString('en-US',{maximumFractionDigits:0})+' '+cur().big;
+
+// ---------- controls ----------
+document.querySelectorAll('.ctrl').forEach(c=>{
+  const id=c.dataset.id, f=c.dataset.fmt;
+  const range=c.querySelector('input[type=range]'), numinp=c.querySelector('.numinp'), val=c.querySelector('.val');
+  if(range){
+    range.min=c.dataset.min; range.max=c.dataset.max; range.step=c.dataset.step;
+    range.value=S[id]; val.textContent=fmt[f](S[id]);
+    range.addEventListener('input',()=>{ S[id]=parseFloat(range.value); val.textContent=fmt[f](S[id]); recalc(); });
+    c._sync=()=>{ range.value=S[id]; val.textContent=fmt[f](S[id]); };
+  } else if(numinp){
+    numinp.value=S[id];
+    numinp.addEventListener('input',()=>{ const v=parseFloat(numinp.value); if(!isNaN(v)){ S[id]=v; recalc(); } });
+    c._sync=()=>{ numinp.value=Math.round(S[id]*100)/100; };
+  }
+});
+function syncAll(){ document.querySelectorAll('.ctrl').forEach(c=>c._sync&&c._sync()); }
+
+// ---------- mode ----------
+function setMode(m){
+  MODE=m;
+  document.getElementById('mDetail').classList.toggle('on',m==='detail');
+  document.getElementById('mSimple').classList.toggle('on',m==='simple');
+  document.getElementById('panelDetail').classList.toggle('hide',m!=='detail');
+  document.getElementById('panelSimple').classList.toggle('hide',m!=='simple');
+  document.getElementById('lblWacc').textContent = m==='detail' ? 'WACC (折现率)' : 'WACC / 股权成本 (折现率)';
+  document.getElementById('lgPV').textContent = m==='detail' ? '显式期 FCFF 现值' : '显式期 FCFE 现值';
+  recalc();
+}
+document.getElementById('mDetail').addEventListener('click',()=>setMode('detail'));
+document.getElementById('mSimple').addEventListener('click',()=>setMode('simple'));
+
+document.getElementById('reset').addEventListener('click',()=>{
+  S={...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36};
+  document.getElementById('codeInput').value='600600';
+  setHeader(); syncAll(); setMode('detail');
+  document.getElementById('fetchStatus').textContent='已恢复青啤默认假设';
+});
+
+function setHeader(){
+  document.getElementById('coName').textContent=S.name;
+  let suf={A:/^6/.test(S.code)?'.SH':'.SZ', HK:'.HK', US:''}[S.market]||'';
+  const mk={A:'A股',HK:'港股',US:'美股'}[S.market]||'';
+  document.getElementById('tickerPill').textContent=S.code+suf+' · '+mk+' · '+cur().code;
+}
+
+// ---------- DCF engines ----------
+function dcfDetail(p){
+  const rows=[]; let rev=p.rev0, pvSum=0;
+  for(let t=1;t<=10;t++){
+    const g=(t<=5?p.g1:p.g2)/100, prev=rev; rev=rev*(1+g);
+    const ebit=rev*p.ebit/100, nopat=ebit*(1-p.tax/100);
+    const da=rev*p.da/100, capex=rev*p.capex/100, dNWC=(rev-prev)*p.nwc/100;
+    const fcf=nopat+da-capex-dNWC, df=1/Math.pow(1+p.wacc/100,t), pv=fcf*df;
+    pvSum+=pv; rows.push({t,g:g*100,c1:rev,c2:ebit,c3:nopat,c4:da,c5:capex,c6:dNWC,fcf,pv});
+  }
+  return finish(rows,pvSum,p);
+}
+function dcfSimple(p){
+  const rows=[]; let np=p.np0, pvSum=0;
+  for(let t=1;t<=10;t++){
+    const g=(t<=5?p.npg1:p.npg2)/100; np=np*(1+g);
+    const fcf=np*p.fcfconv/100, df=1/Math.pow(1+p.wacc/100,t), pv=fcf*df;
+    pvSum+=pv; rows.push({t,g:g*100,c1:np,fcf,pv});
+  }
+  return finish(rows,pvSum,p);
+}
+function finish(rows,pvSum,p){
+  const last=rows[9], w=p.wacc/100, gt=p.gt/100, df10=1/Math.pow(1+w,10);
+  const pvTV = w>gt ? last.fcf*(1+gt)/(w-gt)*df10 : 0;
+  const ev=pvSum+pvTV, equity=ev+p.netcash, perShare=equity/p.shares;
+  return {rows,pvSum,pvTV,ev,equity,perShare};
+}
+const compute = p => (MODE==='detail'?dcfDetail:dcfSimple)({...S,...p});
+const perShareFor=(wacc,gt)=>compute({wacc,gt}).perShare;
+
+// ---------- render ----------
+function baseValid(){ return MODE==='detail' ? (S.rev0>0&&isFinite(S.rev0)) : (S.np0>0&&isFinite(S.np0)); }
+function mktValid(){ return S.shares>0&&isFinite(S.shares)&&S.price>0&&isFinite(S.price); }
+function renderInvalid(){
+  document.getElementById('kpiFair').textContent='—';
+  document.getElementById('kpiPrice').innerHTML = mktValid()? S.price.toFixed(2)+' <small>'+cur().sym+'</small>' : '—';
+  document.getElementById('kpiUpside').textContent='—';
+  document.getElementById('kpiMcap').textContent='—';
+  const miss = !baseValid() ? (MODE==='detail'?'有效的基准营收':'有效的基准归母净利（须为正）') : '有效的股价/总股本';
+  const v=document.getElementById('verdict');
+  v.style.border='1px solid #ef4444'; v.style.background='rgba(239,68,68,.10)';
+  v.innerHTML='<span class="badge" style="background:#ef4444;color:#0d1117">无法估值</span>'+
+    '<span>缺少<b>'+miss+'</b>。常见原因：该公司<b>亏损 / PE 为负</b>，或数据源无此项，净利无法反推。'+
+    '请在左侧手动填入后再算；'+(MODE==='simple'?'<b>亏损公司不适用「净利驱动」DCF</b>，需改用其他估值方法':'或切换「净利驱动」模式手填净利')+'。</span>';
+  ['evTable','projTable','sensTable','metaTable'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='';});
+  document.getElementById('evBar').innerHTML='';
+}
+// 现价隐含折现率：二分求令「每股内在价值 = 现价」的 Ke（其它假设不变）
+function impliedKe(){
+  if(!baseValid()||!mktValid()) return NaN;
+  const f=x=>compute({wacc:x}).perShare - S.price;
+  let lo=S.gt+0.05, hi=60;          // 必须 > 永续增速，终值才有限
+  if(f(hi)>0) return Infinity;      // 60% 折现仍便宜 → 净现金已超现价
+  if(f(lo)<=0) return lo;
+  for(let i=0;i<64;i++){ const m=(lo+hi)/2; if(f(m)>0) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+// 现价隐含「前5年增速」：二分求令 内在=现价 的 g（详细模式解 g1，净利模式解 npg1）
+function impliedGrowth(){
+  if(!baseValid()||!mktValid()) return NaN;
+  const key = MODE==='detail' ? 'g1' : 'npg1';
+  const f=x=>compute({[key]:x}).perShare - S.price;   // 增速越高→价值越高（单调递增）
+  let lo=-50, hi=100;
+  if(f(lo)>0) return -Infinity;    // 即便 -50% 仍高于现价
+  if(f(hi)<0) return Infinity;     // 即便 +100% 仍低于现价
+  for(let i=0;i<64;i++){ const m=(lo+hi)/2; if(f(m)<0) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+function updateNetcashHint(){
+  const hn=document.getElementById('hintNetcash'); if(!hn) return;
+  if(!S.netcash){
+    hn.innerHTML='⚠ <span style="color:var(--warn)">当前按 净现金 = 0 计算</span>。现金充裕的公司（电信 / 白酒 / 互联网）会被<b>系统性低估</b>——请务必按年报填入「现金及等价物 + 金融资产 − 有息负债」。';
+  }else{
+    hn.innerHTML='已计入净现金 '+big(S.netcash)+'（'+(S.netcash>0?'净现金':'净负债')+'）。接口不提供，请核对年报。';
+  }
+}
+// 三视角「量化初筛」：随加载股票实时更新（ROE=PB/PE、估值、隐含折现率），定性维度交给用户
+function renderGuru(){
+  const el=document.getElementById('guruDynamic'); if(!el) return;
+  const nm=document.getElementById('guruStockName'); if(nm) nm.textContent=S.name+'（'+S.code+'）';
+  const uc=document.getElementById('guruCaseUnicom'); if(uc) uc.style.display=/^0*762$/.test(S.code)?'block':'none';
+  if(!baseValid()||!mktValid()){ el.innerHTML='<p style="color:var(--muted);font-size:12.5px">加载有效股票后，这里按其实时量化指标自动给出三视角初筛。</p>'; return; }
+  const r=compute({}), mcapNow=S.price*S.shares;
+  const np=S.netprofit>0?S.netprofit:NaN, pe=np>0?mcapNow/np:NaN;
+  const roe=(S.pb>0&&pe>0)?S.pb/pe*100:NaN;        // ROE ≈ PB/PE
+  const upside=(r.perShare/S.price-1)*100, ike=impliedKe();
+  let bizC,bizT;
+  if(isNaN(roe)){ bizC='v-mid'; bizT='？ 缺 PB → 无法算 ROE（用东财源可得）'; }
+  else if(roe>=18){ bizC='v-ok'; bizT='✓ ROE≈'+roe.toFixed(0)+'%（达芒格“伟大”线 18%+）'; }
+  else if(roe>=12){ bizC='v-ok'; bizT='✓ ROE≈'+roe.toFixed(0)+'%（资本回报良好）'; }
+  else if(roe>=8){ bizC='v-mid'; bizT='~ ROE≈'+roe.toFixed(0)+'%（中等，接近股权成本）'; }
+  else { bizC='v-no'; bizT='✗ ROE≈'+roe.toFixed(0)+'%（低于股权成本，价值创造存疑）'; }
+  let prC,prT;
+  const peTxt=isFinite(pe)?pe.toFixed(1)+'×':'—', pbTxt=S.pb>0?'、PB '+S.pb.toFixed(2)+'×':'';
+  if(upside>15){ prC='v-ok'; prT='✓ 便宜（较内在价值 +'+upside.toFixed(0)+'%；PE '+peTxt+pbTxt+'）'; }
+  else if(upside<-15){ prC='v-no'; prT='✗ 偏贵（'+upside.toFixed(0)+'%；PE '+peTxt+pbTxt+'）'; }
+  else { prC='v-mid'; prT='~ 大致合理（'+(upside>=0?'+':'')+upside.toFixed(0)+'%；PE '+peTxt+pbTxt+'）'; }
+  let coC,coT;
+  if(S.netcash>0){ coC='v-ok'; coT='✓ 净现金为正（'+big(S.netcash)+'）—— 资本配置/管理层/文化仍需你定性'; }
+  else if(S.netcash<0){ coC='v-mid'; coT='~ 净负债（'+big(S.netcash)+'）—— 杠杆/管理层/文化需定性'; }
+  else { coC='v-mid'; coT='~ 净现金未填 —— 管理层/资本配置/文化需定性'; }
+  let synth;
+  if(isNaN(roe)) synth='缺 ROE 数据，仅能判断「好价格」；「好生意」需补 ROE 与定性研究。';
+  else if(roe<8) synth='量化画像：<b>低资本回报</b> + '+(upside>15?'<b>便宜</b>':(upside<-15?'估值偏贵':'估值合理'))+' → 像“便宜的平庸生意”，三人都会先质疑“是不是好生意”（参见联通案例）。';
+  else if(roe>=12) synth='量化画像：<b>高资本回报</b> + '+(upside>15?'<b>便宜</b>':(upside<-15?'估值偏贵':'估值合理'))+' → 过了“好生意”的 ROE 关；但<b>护城河是否持久、定价权、管理层</b>仍需你定性确认。';
+  else synth='量化画像：资本回报中等 → 是否“好生意”取决于护城河与增长可持续性（定性），别只看价格。';
+  el.innerHTML=`<div class="tbl-wrap"><table>
+    <thead><tr><th style="width:84px">维度</th><th>量化判定（本股票实时）</th></tr></thead>
+    <tbody>
+      <tr><td><b>好生意</b><br><span style="color:var(--muted);font-size:11px">资本回报</span></td><td class="${bizC}">${bizT}<br><span style="color:var(--muted);font-weight:400;font-size:11px">护城河 / 定价权 / 商业模式差异化 → 需你定性</span></td></tr>
+      <tr><td><b>好公司</b><br><span style="color:var(--muted);font-size:11px">财务稳健</span></td><td class="${coC}">${coT}</td></tr>
+      <tr><td><b>好价格</b><br><span style="color:var(--muted);font-size:11px">估值</span></td><td class="${prC}">${prT}<br><span style="color:var(--muted);font-weight:400;font-size:11px">现价隐含折现率 ${!isFinite(ike)?'&gt;60%':ike.toFixed(1)+'%'} vs 你设 ${S.wacc.toFixed(1)}%</span></td></tr>
+    </tbody></table></div>
+    <p style="font-size:12px;line-height:1.7;margin-top:8px">${synth}</p>`;
+}
+function recalc(){
+  updateNetcashHint(); renderGuru();
+  if(!baseValid()||!mktValid()){ renderInvalid(); return; }   // 脏数据/缺失 → 不输出估值
+  const r=compute({}), ps=r.perShare, price=S.price;
+  const upside=(ps/price-1)*100, mcapNow=price*S.shares;
+
+  document.getElementById('kpiFair').innerHTML = ps.toFixed(2)+' <small>'+cur().sym+'</small>';
+  document.getElementById('kpiPrice').innerHTML = price.toFixed(2)+' <small>'+cur().sym+'</small>';
+  const up=document.getElementById('kpiUpside');
+  up.innerHTML=(upside>=0?'+':'')+upside.toFixed(1)+' <small>%</small>';
+  up.style.color = upside>=0?'var(--up)':'var(--down)';
+  document.getElementById('kpiMcap').innerHTML = big(r.equity)+' <small>/ '+big(mcapNow)+'</small>';
+
+  const v=document.getElementById('verdict');
+  let label,bd;
+  if(upside>15){label='低估';bd='#22c55e';} else if(upside<-15){label='高估';bd='#ef4444';} else {label='大致合理';bd='#f59e0b';}
+  v.style.background='rgba(127,127,127,.08)'; v.style.border='1px solid '+bd;
+  v.innerHTML='<span class="badge" style="background:'+bd+';color:#0d1117">'+label+'</span>'+
+    '<span><b>'+S.name+'</b> 内在价值 <b>'+ps.toFixed(2)+' '+cur().sym+'</b> vs 当前 <b>'+price.toFixed(2)+
+    ' '+cur().sym+'</b>，'+(upside>=0?'高出':'低于')+' <b>'+Math.abs(upside).toFixed(1)+'%</b>。</span>';
+
+  const tot=r.equity>0?r.equity:1;
+  const parts=[{v:r.pvSum,c:'#3b82f6',n:'显式期'},{v:r.pvTV,c:'#8b5cf6',n:'终值'},{v:S.netcash,c:'#22c55e',n:'净现金'}];
+  document.getElementById('evBar').innerHTML=parts.map(p=>{
+    const w=Math.max(0,p.v/tot*100);
+    return '<div style="width:'+w+'%;background:'+p.c+'">'+(w>9?p.n+' '+w.toFixed(0)+'%':'')+'</div>';
+  }).join('');
+
+  document.getElementById('evTable').innerHTML=`
+    <tr><td>显式期现值</td><td>${big(r.pvSum)}</td><td>${(r.pvSum/r.equity*100).toFixed(1)}%</td></tr>
+    <tr><td>终值现值</td><td>${big(r.pvTV)}</td><td>${(r.pvTV/r.equity*100).toFixed(1)}%</td></tr>
+    <tr><td>${MODE==='detail'?'企业价值 (EV)':'经营现值小计'}</td><td>${big(r.ev)}</td><td>–</td></tr>
+    <tr><td>+ 净现金</td><td>${big(S.netcash)}</td><td>${(S.netcash/r.equity*100).toFixed(1)}%</td></tr>
+    <tr style="font-weight:700;border-top:2px solid var(--line)"><td>股权价值</td><td>${big(r.equity)}</td><td>100%</td></tr>`;
+
+  // projection
+  if(MODE==='detail'){
+    document.getElementById('projTitle').textContent='10 年自由现金流预测 (FCFF, 百万本币)';
+    const head=`<thead><tr><th>年</th><th>增速</th><th>营收</th><th>EBIT</th><th>NOPAT</th>
+      <th>+折旧</th><th>−资本开支</th><th>−ΔNWC</th><th>FCFF</th><th>现值</th></tr></thead>`;
+    const body=r.rows.map(x=>`<tr><td>Y${x.t}</td><td>${x.g.toFixed(1)}%</td><td>${fmt.int(x.c1)}</td>
+      <td>${fmt.int(x.c2)}</td><td>${fmt.int(x.c3)}</td><td>${fmt.int(x.c4)}</td><td>${fmt.int(x.c5)}</td>
+      <td>${fmt.int(x.c6)}</td><td><b>${fmt.int(x.fcf)}</b></td><td>${fmt.int(x.pv)}</td></tr>`).join('');
+    const foot=`<tfoot><tr><td colspan="9">显式期 FCFF 现值合计</td><td>${fmt.int(r.pvSum)}</td></tr></tfoot>`;
+    document.getElementById('projTable').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
+  }else{
+    document.getElementById('projTitle').textContent='10 年自由现金流预测 (FCFE, 百万本币)';
+    const head=`<thead><tr><th>年</th><th>净利增速</th><th>归母净利</th><th>FCFE (净利×转换率)</th><th>现值</th></tr></thead>`;
+    const body=r.rows.map(x=>`<tr><td>Y${x.t}</td><td>${x.g.toFixed(1)}%</td><td>${fmt.int(x.c1)}</td>
+      <td><b>${fmt.int(x.fcf)}</b></td><td>${fmt.int(x.pv)}</td></tr>`).join('');
+    const foot=`<tfoot><tr><td colspan="4">显式期 FCFE 现值合计</td><td>${fmt.int(r.pvSum)}</td></tr></tfoot>`;
+    document.getElementById('projTable').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
+  }
+
+  // sensitivity
+  const waccs=[S.wacc-1.5,S.wacc-0.75,S.wacc,S.wacc+0.75,S.wacc+1.5].map(x=>+x.toFixed(2));
+  const gts=[S.gt-1,S.gt-0.5,S.gt,S.gt+0.5,S.gt+1].map(x=>+x.toFixed(2));
+  let s='<thead><tr><th class="axis">WACC↓ \\ g∞→</th>';
+  gts.forEach(g=>s+=`<th class="axis">${g.toFixed(1)}%</th>`); s+='</tr></thead><tbody>';
+  waccs.forEach(w=>{
+    s+=`<tr><th class="axis">${w.toFixed(1)}%</th>`;
+    gts.forEach(g=>{
+      if(!(w/100>g/100)){ s+='<td class="cell" style="color:#8b9bb0">n/a</td>'; return; }
+      const val2=perShareFor(w,g), diff=val2/S.price-1;
+      let bgc;
+      if(diff>0.05) bgc='rgba(34,197,94,'+Math.min(.45,.12+diff).toFixed(2)+')';
+      else if(diff<-0.05) bgc='rgba(239,68,68,'+Math.min(.45,.12-diff).toFixed(2)+')';
+      else bgc='rgba(245,158,11,.18)';
+      const here=(w===+S.wacc.toFixed(2)&&g===+S.gt.toFixed(2));
+      s+=`<td class="cell" style="background:${bgc};${here?'outline:2px solid #fff;':''}">${val2.toFixed(1)}</td>`;
+    });
+    s+='</tr>';
+  });
+  s+='</tbody>'; document.getElementById('sensTable').innerHTML=s;
+
+  const np=S.netprofit>0?S.netprofit:NaN;
+  const impliedPE=mcapNow/np, fairPE=r.equity/np;
+  const ike=impliedKe();
+  const ikeTxt = !isFinite(ike) ? '&gt;60%' : ike.toFixed(1)+'%';
+  const gap = isFinite(ike) ? ike-S.wacc : NaN;
+  const ikeColor = !isFinite(ike) ? 'var(--up)' : (gap>1.5?'var(--warn)':(gap<-1.5?'var(--up)':'var(--txt)'));
+  let ikeNote='—';
+  if(isFinite(ike)){
+    if(gap>1.5) ikeNote='市场要求回报远高于模型折现率 → 模型偏乐观（估值可能被高估）';
+    else if(gap<-1.5) ikeNote='市场要求回报低于模型折现率 → 模型偏保守';
+    else ikeNote='与模型折现率接近 → 估值假设与市场定价基本一致';
+  }
+  // 反向DCF：现价隐含「前5年增速」
+  const ig=impliedGrowth();
+  const gKey = MODE==='detail'?S.g1:S.npg1;
+  const gName = MODE==='detail'?'营收增速':'净利增速';
+  const igTxt = ig===Infinity?'&gt;100%':(ig===-Infinity?'&lt;−50%':ig.toFixed(1)+'%');
+  const ggap = isFinite(ig)?ig-gKey:NaN;
+  const igColor = !isFinite(ig)?'var(--txt)':(ggap<-1.5?'var(--warn)':(ggap>1.5?'var(--up)':'var(--txt)'));
+  let igNote='—';
+  if(isFinite(ig)){
+    if(ggap<-1.5) igNote='现价仅隐含 '+ig.toFixed(1)+'%，低于你假设的 '+gKey.toFixed(1)+'% → 低估结论建立在“比市场更乐观”上';
+    else if(ggap>1.5) igNote='现价已隐含 '+ig.toFixed(1)+'%（高于你的假设）→ 市场比你更乐观';
+    else igNote='与你的假设接近 → 增长预期与市场基本一致';
+  }
+  // 安全边际 → 建议买入价；防“风险双罚”
+  const buyPrice = ps*(1-S.mos/100);
+  const doubleRisk = (S.wacc>=10 && S.mos>=30);
+  document.getElementById('metaTable').innerHTML=`
+    <tr><td>每股内在价值</td><td><b>${ps.toFixed(2)} ${cur().sym}</b></td></tr>
+    <tr><td>潜在空间</td><td style="color:${upside>=0?'var(--up)':'var(--down)'}">${(upside>=0?'+':'')+upside.toFixed(1)}%</td></tr>
+    <tr><td>隐含股权价值</td><td>${big(r.equity)}</td></tr>
+    <tr><td>终值占股权价值</td><td>${(r.pvTV/r.equity*100).toFixed(0)}%</td></tr>
+    <tr><td>基准归母净利</td><td>${isNaN(np)?'—':big(np)}</td></tr>
+    <tr><td>当前 PE</td><td>${isNaN(impliedPE)?'—':impliedPE.toFixed(1)+'×'}</td></tr>
+    <tr><td>内在价值隐含 PE</td><td>${isNaN(fairPE)?'—':fairPE.toFixed(1)+'×'}</td></tr>
+    <tr style="border-top:2px solid var(--line)"><td><b>现价隐含折现率</b> <span style="color:var(--muted);font-weight:400">令内在=现价的 Ke</span></td><td style="color:${ikeColor};font-weight:700">${ikeTxt}</td></tr>
+    <tr><td>　模型折现率 / 永续增速</td><td>${S.wacc.toFixed(1)}% / ${S.gt.toFixed(1)}%</td></tr>
+    <tr><td colspan="2" style="color:var(--muted);font-size:11px;text-align:left;white-space:normal">${ikeNote}</td></tr>
+    <tr style="border-top:2px solid var(--line)"><td><b>现价隐含前5年${gName}</b> <span style="color:var(--muted);font-weight:400">令内在=现价</span></td><td style="color:${igColor};font-weight:700">${igTxt}</td></tr>
+    <tr><td>　你的假设</td><td>${gKey.toFixed(1)}%</td></tr>
+    <tr><td colspan="2" style="color:var(--muted);font-size:11px;text-align:left;white-space:normal">${igNote}</td></tr>
+    <tr style="border-top:2px solid var(--line)"><td><b>建议买入价</b> <span style="color:var(--muted);font-weight:400">含 ${S.mos.toFixed(0)}% 安全边际</span></td><td style="font-weight:700">${buyPrice.toFixed(2)} ${cur().sym}</td></tr>
+    ${doubleRisk?`<tr><td colspan="2" style="color:var(--warn);font-size:11px;text-align:left;white-space:normal">⚠ 已用偏高 WACC(${S.wacc.toFixed(1)}%)折现，又叠加 ${S.mos.toFixed(0)}% 安全边际——同一风险可能被罚两次，注意别过度保守</td></tr>`:''}`;
+}
+
+// ---------- JSONP & fetch ----------
+function jsonp(url,cbParam){
+  return new Promise((resolve,reject)=>{
+    const cbName='__jp'+(jsonp._i=(jsonp._i||0)+1);
+    const sep=url.includes('?')?'&':'?';
+    const sc=document.createElement('script');
+    const to=setTimeout(()=>{cleanup();reject(new Error('timeout'));},12000);
+    function cleanup(){clearTimeout(to);try{delete window[cbName];}catch(e){}sc.remove();}
+    window[cbName]=d=>{cleanup();resolve(d);};
+    sc.onerror=()=>{cleanup();reject(new Error('network'));};
+    sc.src=url+sep+cbParam+'='+cbName;
+    document.body.appendChild(sc);
+  });
+}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const STOCK_TYPES={'1':1,'2':1,'19':1,'20':1};   // 沪A/深A/港股/美股 普通股
+function marketOf(mkt){ if(mkt==='105'||mkt==='106'||mkt==='107')return'US'; if(mkt==='116'||mkt==='128'||mkt==='124'||mkt==='113')return'HK'; return'A'; }
+
+async function quoteOK(secid){
+  try{
+    const q=await jsonp('https://push2.eastmoney.com/api/qt/stock/get?secid='+secid+'&fields=f43,f58','cb');
+    return (q&&q.data&&q.data.f43!=null)?true:false;
+  }catch(e){ return false; }
+}
+async function resolveTicker(input){
+  const s=input.trim();
+  // A股 6 位数字 → 直接构造 secid，不走搜索接口（最稳）
+  if(/^\d{6}$/.test(s)) return {secid:(/^(6|9|5|11|13)/.test(s)?'1':'0')+'.'+s, code:s, market:'A'};
+  // 港股 1–5 位数字 → 116.xxxxx
+  if(/^\d{1,5}$/.test(s)){ const code=s.padStart(5,'0'); return {secid:'116.'+code, code, market:'HK'}; }
+  // 字母(美股) 或 名称 → 试搜索接口（失败可兜底）
+  const up=s.toUpperCase();
+  try{
+    const sr=await jsonp('https://searchadapter.eastmoney.com/api/suggest/get?type=14&count=8'+
+      '&token=D43BF722C8E33BDC906FB84D85E326E8&input='+encodeURIComponent(s),'cb');
+    const arr=(sr&&sr.QuotationCodeTable&&sr.QuotationCodeTable.Data)||[];
+    const pick=arr.find(d=>STOCK_TYPES[d.SecurityType])||arr[0];
+    if(pick) return {secid:pick.QuoteID, code:pick.Code, market:marketOf(pick.MktNum)};
+  }catch(e){ /* 搜索被拦截，走美股兜底 */ }
+  // 兜底：纯字母按美股，依次试 NASDAQ/NYSE/AMEX
+  if(/^[A-Z][A-Z.]{0,6}$/.test(up)){
+    for(const m of ['105','106','107']) if(await quoteOK(m+'.'+up)) return {secid:m+'.'+up, code:up, market:'US'};
+  }
+  throw new Error('未找到该证券（请用代码：A股 600600 / 港股 00700 / 美股 AAPL）');
+}
+
+// 加载会设置全局变量的脚本（腾讯行情，非 callback 形式）
+function loadScript(src){
+  return new Promise((resolve,reject)=>{
+    const sc=document.createElement('script');
+    const to=setTimeout(()=>{cleanup();reject(new Error('timeout'));},12000);
+    function cleanup(){clearTimeout(to);sc.remove();}
+    sc.onload=()=>{cleanup();resolve();};
+    sc.onerror=()=>{cleanup();reject(new Error('network'));};
+    sc.charset='gbk'; sc.src=src; document.body.appendChild(sc);
+  });
+}
+// 归一化行情：返回 {price, shares(百万), mktcapM(百万), peTTM, name, source}
+async function emQuote(secid){
+  const q=await jsonp('https://push2.eastmoney.com/api/qt/stock/get?secid='+secid+
+    '&fields=f43,f57,f58,f59,f84,f116,f163,f167','cb');
+  const d=q&&q.data; if(!d||d.f43==null) throw new Error('东财无行情');
+  const dec=Math.pow(10,d.f59||2);
+  return {price:d.f43/dec, shares:d.f84/1e6, mktcapM:d.f116/1e6,
+          peTTM:d.f163>0?d.f163/100:0, pb:d.f167>0?d.f167/100:NaN,
+          name:String(d.f58||'').replace(/\s+/g,''), source:'东财'};
+}
+async function txQuote(market,code){
+  const pfx = market==='US' ? 'us'+code.toUpperCase()
+            : market==='HK' ? 'hk'+code.padStart(5,'0')
+            : (/^(6|9)/.test(code)?'sh':'sz')+code;
+  await loadScript('https://qt.gtimg.cn/q='+pfx);
+  const raw=window['v_'+pfx]; if(!raw) throw new Error('腾讯无数据');
+  const a=raw.split('~');                 // a[3]价 a[39]PE(TTM) a[45]总市值(亿) —— A/港/美字段位置一致
+  const price=+a[3], pe=+a[39], mcapYi=+a[45];
+  if(!price) throw new Error('腾讯无行情');
+  const mktcapM=mcapYi*100;               // 亿→百万
+  const nm=(a[1]||'').replace(/\s+/g,'');  // charset=gbk 已正确解码中文名
+  let pb = market==='A' ? +a[46] : NaN;  // gtimg 仅 A 股 PB(a[46])可靠；港美股 PB 由东财 f167 提供
+  if(!(pb>0)) pb=NaN;
+  return {price, shares:mktcapM/price, mktcapM, peTTM:pe>0?pe:0, pb, name:/[一-龥A-Za-z]/.test(nm)?nm:'', source:'腾讯'};
+}
+
+async function fetchData(){
+  const input=document.getElementById('codeInput').value.trim();
+  const st=document.getElementById('fetchStatus'), btn=document.getElementById('fetchBtn');
+  if(!input){ st.textContent='⚠ 请输入代码或名称'; st.style.color='var(--down)'; return; }
+  btn.disabled=true; st.style.color='var(--muted)'; st.textContent='抓取中…';
+  try{
+    const tk=await resolveTicker(input);
+    S.code=tk.code; S.market=tk.market;
+
+    // 行情：先东财，失败自动切腾讯（不同服务器，规避单一域名被拦）
+    let Q;
+    try{ Q=await emQuote(tk.secid); }
+    catch(e1){
+      try{ Q=await txQuote(tk.market, tk.code); }
+      catch(e2){ throw new Error('东财/腾讯行情均不可用，请直接手填 价/总股本/净利（模型可纯离线计算）'); }
+    }
+    S.price=Q.price; S.shares=Q.shares;
+    // 归母净利(TTM) = 总市值 ÷ PE(TTM)；PE≤0(亏损/缺失) → NaN。绝不继承上一只票的旧值！
+    const npTTM = Q.peTTM>0 ? Q.mktcapM/Q.peTTM : NaN;
+    S.np0=npTTM; S.netprofit=npTTM;
+    S.name=Q.name||tk.code; S.pb=Q.pb;
+
+    let extra='', detail=false;
+    if(tk.market==='A' && Q.source==='东财'){
+      // A股且东财可用：取年报营收 → 详细模式
+      try{
+        const rr=await jsonp('https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_LICO_FN_CPD'+
+          '&columns=SECUCODE,SECURITY_NAME_ABBR,REPORTDATE,TOTAL_OPERATE_INCOME,PARENT_NETPROFIT'+
+          '&filter=(SECURITY_CODE%3D%22'+tk.code+'%22)&pageSize=24&sortColumns=REPORTDATE&sortTypes=-1','callback');
+        const data=(rr&&rr.result&&rr.result.data)||[];
+        const ann=data.filter(x=>/-12-31/.test(x.REPORTDATE));
+        if(ann.length && ann[0].TOTAL_OPERATE_INCOME>0){
+          if(data[0]&&data[0].SECURITY_NAME_ABBR) S.name=data[0].SECURITY_NAME_ABBR;
+          S.rev0=ann[0].TOTAL_OPERATE_INCOME/1e6;
+          const npA=ann[0].PARENT_NETPROFIT/1e6;
+          if(npA>0){ S.netprofit=npA; S.np0=npA; S.ebit=clamp(npA/(1-S.tax/100)/S.rev0*100,3,70); }
+          if(ann.length>1 && ann[1].TOTAL_OPERATE_INCOME>0)
+            extra=' · 近一年营收增速 '+((ann[0].TOTAL_OPERATE_INCOME/ann[1].TOTAL_OPERATE_INCOME-1)*100).toFixed(1)+'%（参考）';
+          detail=true;
+        }
+      }catch(e){}
+    }
+    if(!detail) S.rev0=NaN;     // 非详细模式：清除营收，杜绝跨公司污染
+    S.netcash=0;
+    setHeader(); syncAll(); setMode(detail?'detail':'simple');
+
+    const when=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+    const mk={A:'A股',HK:'港股',US:'美股'}[S.market];
+    const srcTag = Q.source==='腾讯' ? ' · <span style="color:var(--accent2)">数据源:腾讯(备用)</span>' : '';
+    if(baseValid()){
+      st.style.color='var(--up)';
+      st.innerHTML='✓ '+S.name+' '+S.code+'（'+mk+'/'+cur().code+'） · 价 '+S.price.toFixed(2)+' '+cur().sym+
+        ' · 归母 '+(S.netprofit>0?big(S.netprofit):'—')+extra+srcTag+' · '+when+
+        ' &nbsp;<span style="color:var(--warn)">⚠ 增长率/折旧/资本开支/净现金 请自行设定或手填</span>';
+    }else{
+      st.style.color='var(--warn)';
+      st.innerHTML='⚠ 已取行情：'+S.name+' '+S.code+' 价 '+S.price.toFixed(2)+' '+cur().sym+srcTag+
+        '，但<b>归母净利无法反推</b>（PE 非正/亏损，或数据源缺失）。请在左侧手填「基准归母净利」；'+
+        '<b>亏损公司不适用净利驱动 DCF</b>，建议改用 PB / PS 或其他方法。';
+    }
+  }catch(err){
+    st.style.color='var(--down)';
+    st.innerHTML='✗ '+err.message+'。<span style="color:var(--muted)">行情被网络/插件拦截时，本模型仍可纯手动使用：在右侧直接填 当前股价、总股本、净利（或营收），即可离线估值。</span>';
+  }finally{ btn.disabled=false; }
+}
+document.getElementById('fetchBtn').addEventListener('click',fetchData);
+document.getElementById('codeInput').addEventListener('keydown',e=>{ if(e.key==='Enter') fetchData(); });
+
+setHeader(); setMode('detail');
+</script>
+</body>
+</html>
