@@ -372,7 +372,9 @@ function setMode(m){
   document.getElementById('panelSimple').classList.toggle('hide',m!=='simple');
   document.getElementById('lblWacc').textContent = m==='detail' ? 'WACC (折现率)' : 'WACC / 股权成本 (折现率)';
   document.getElementById('lgPV').textContent = m==='detail' ? '显式期 FCFF 现值' : '显式期 FCFE 现值';
-  recalc();
+  // 切换模式后，若有机构一致预期，按新模式的口径（营收/净利）重新填充增速
+  const cs=consensusSeriesForMode();
+  if(cs){ applyConsensusGrowth(cs); } else { recalc(); }
 }
 document.getElementById('mDetail').addEventListener('click',()=>setMode('detail'));
 document.getElementById('mSimple').addEventListener('click',()=>setMode('simple'));
@@ -594,24 +596,34 @@ document.getElementById('useYearly').addEventListener('change', e=>{
 document.getElementById('fillYearly').addEventListener('click', ()=>{ fillYearly(); buildYearlyGrid(); recalc(); });
 
 // ===== 机构一致预期增速（自动填充）=====
-// 经后端 /api/forecast 抓东财盈利预测（仅 A 股有覆盖）。无后端→返回 null，静默降级为默认两段/手填。
-async function fetchConsensusGrowth(market, code, np0){
-  const url=(QUAL_API||'')+'/api/forecast?market='+encodeURIComponent(market)+'&code='+encodeURIComponent(code)+((isFinite(np0)&&np0>0)?'&np0='+np0:'');
+// 经后端 /api/forecast 抓东财盈利预测（仅 A 股有覆盖），返回【营收】与【净利】两套一致预期增速。
+// 无后端→返回 null，静默降级为默认两段/手填。结果存在 S.consensus，供切换模式时按对应口径重填。
+async function fetchConsensusGrowth(market, code){
+  const url=(QUAL_API||'')+'/api/forecast?market='+encodeURIComponent(market)+'&code='+encodeURIComponent(code);
   const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),8000);
   try{
     const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(to);
     if(!r.ok) return null;
     const j=await r.json();
-    if(!j||!j.available||!Array.isArray(j.years)||!j.years.length) return null;
+    if(!j||!j.available) return null;
+    if(!(j.revenue&&j.revenue.length)&&!(j.netprofit&&j.netprofit.length)) return null;
     return j;
   }catch(e){ clearTimeout(to); return null; }
 }
-// 把一致预期的逐年增速填进 10 年网格：预测年(通常 Y1–Y3)用一致预期，其后线性衰减到永续增速 gt
-function applyConsensusGrowth(years){
-  const n=Math.min(years.length,10), gv=new Array(10);
+// 按当前模式取对应口径的一致预期序列：营收驱动(详细)=营收增速；净利驱动=净利增速
+function consensusSeriesForMode(){
+  const c=S.consensus; if(!c) return null;
+  const s = (MODE==='detail') ? c.revenue : c.netprofit;
+  return (s&&s.length)?s:null;
+}
+// 把一致预期的逐年增速填进 10 年网格：预测年(通常 Y1–Y3)用一致预期，其后线性衰减到永续增速 gt。
+// 只设置“当前模式”对应的两段增速（详细→g1/g2，净利→npg1/npg2），避免把营收/净利口径填到对方。
+function applyConsensusGrowth(series){
+  if(!series||!series.length) return false;
+  const n=Math.min(series.length,10), gv=new Array(10);
   for(let i=0;i<10;i++){
-    if(i<n){ gv[i]=clamp(+years[i].growth, -40, 80); }
-    else{ const last=clamp(+years[n-1].growth,-40,80), frac=(i-n+1)/(10-n); gv[i]=+(last+(S.gt-last)*frac).toFixed(1); }
+    if(i<n){ gv[i]=clamp(+series[i].growth, -40, 80); }
+    else{ const last=clamp(+series[n-1].growth,-40,80), frac=(i-n+1)/(10-n); gv[i]=+(last+(S.gt-last)*frac).toFixed(1); }
   }
   S.growthYears=gv; S.useYearly=true;
   const cb=document.getElementById('useYearly'); if(cb) cb.checked=true;
@@ -619,8 +631,9 @@ function applyConsensusGrowth(years){
   // 两段增速也对齐（供反向 DCF / 关闭逐年时回退使用）：Y1–5 段均值、Y6–10 段均值
   const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
   const s1=+mean(gv.slice(0,5)).toFixed(1), s2=+mean(gv.slice(5)).toFixed(1);
-  S.g1=s1; S.g2=s2; S.npg1=s1; S.npg2=s2;
+  if(MODE==='detail'){ S.g1=s1; S.g2=s2; } else { S.npg1=s1; S.npg2=s2; }
   syncAll(); buildYearlyGrid(); recalc();
+  return true;
 }
 
 // 三视角「量化初筛」：随加载股票实时更新（ROE=PB/PE、估值、隐含折现率），定性维度交给用户
@@ -960,18 +973,24 @@ async function fetchData(){
       }catch(e){}
     }
     if(!detail) S.rev0=NaN;     // 非详细模式：清除营收，杜绝跨公司污染
+    S.consensus=null;           // 清除上一只票的一致预期，避免污染（setMode 在下方会据此判断是否重填）
     // 自动估算净现金并计入估值（A/港/美各模式）。净利模式下基准净利含少量利息收入→轻微重复(<1%)，已在提示中说明
     S.netcashEst=null; S.netcash=0;
     try{ const nc=await fetchNetCash(S.market, S.code); if(nc && isFinite(nc.netcashM)){ S.netcashEst=nc.netcashM; S.netcash=nc.netcashM; } }catch(e){}
     setHeader(); syncAll(); setMode(detail?'detail':'simple');
 
-    // 机构一致预期增速：自动抓取并填充逐年增速网格（仅 A 股有覆盖；无后端则静默跳过）
+    // 机构一致预期增速：自动抓取，按当前模式口径（营收驱动→营收增速 / 净利驱动→净利增速）填充逐年增速网格
+    // （仅 A 股有覆盖；无后端则静默跳过）
     let consTag='', consApplied=false;
     if(baseValid()){
       try{
-        const cg=await fetchConsensusGrowth(S.market, S.code, S.np0);
-        if(cg){ applyConsensusGrowth(cg.years); consApplied=true;
-          consTag=' · <span style="color:var(--accent2)">增速按机构一致预期填充（'+cg.years.map(y=>y.year+y.mark).join('/')+'，其后渐降至永续）</span>'; }
+        const cg=await fetchConsensusGrowth(S.market, S.code);
+        if(cg){ S.consensus=cg;
+          const series=consensusSeriesForMode();
+          if(series && applyConsensusGrowth(series)){ consApplied=true;
+            const what=(MODE==='detail')?'营收':'净利';
+            consTag=' · <span style="color:var(--accent2)">'+what+'增速按机构一致预期填充（'+series.map(y=>y.year+y.mark).join('/')+'，其后渐降至永续）</span>'; }
+        }
       }catch(e){}
     }
 
