@@ -172,6 +172,14 @@
         </div>
       </div>
 
+      <!-- ---- 逐年增速（共享，勾选后覆盖两段）---- -->
+      <div class="group-title">逐年增速 · 手动（可选）</div>
+      <div class="ctrl">
+        <div class="row" style="margin-bottom:4px"><label style="cursor:pointer"><input type="checkbox" id="useYearly" style="vertical-align:-1px;margin-right:5px;accent-color:var(--accent2)">启用逐年手动增速</label><a id="fillYearly" style="color:var(--accent2);cursor:pointer;font-size:12px">↺ 按两段填充</a></div>
+        <div class="hint">勾选后用下方每年增速覆盖上面的两段；适合“明年+15%、后年+12%、之后递减”这类具体路径（详细模式=营收增速，净利模式=净利增速）。</div>
+        <div id="yearlyGrid" class="hide" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px"></div>
+      </div>
+
       <!-- ---- shared ---- -->
       <div class="group-title">折现 & 终值</div>
       <div class="ctrl" data-min="4" data-max="18" data-step="0.1" data-id="wacc" data-fmt="pct">
@@ -353,7 +361,7 @@ const DEFAULTS = {
   mos:25
 };
 function defaultQual(){ return {moat:1,pricing:1,model:1,light:1,mgmt:1,capital:1,culture:1,minority:1}; }
-let S = {...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36, qual:defaultQual()};
+let S = {...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36, qual:defaultQual(), useYearly:false, growthYears:null};
 let MODE = 'detail';
 
 const cur = ()=>CUR[S.market]||CUR.A;
@@ -396,7 +404,8 @@ document.getElementById('mDetail').addEventListener('click',()=>setMode('detail'
 document.getElementById('mSimple').addEventListener('click',()=>setMode('simple'));
 
 document.getElementById('reset').addEventListener('click',()=>{
-  S={...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36, qual:loadQual('600600')||defaultQual()};
+  S={...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36, qual:loadQual('600600')||defaultQual(), useYearly:false, growthYears:null};
+  document.getElementById('useYearly').checked=false; document.getElementById('yearlyGrid').classList.add('hide');
   document.getElementById('codeInput').value='600600';
   setHeader(); syncAll(); syncQualCard(); setMode('detail');
   document.getElementById('fetchStatus').textContent='已恢复青啤默认假设';
@@ -413,7 +422,7 @@ function setHeader(){
 function dcfDetail(p){
   const rows=[]; let rev=p.rev0, pvSum=0;
   for(let t=1;t<=10;t++){
-    const g=(t<=5?p.g1:p.g2)/100, prev=rev; rev=rev*(1+g);
+    const base=(t<=5?p.g1:p.g2), g=((p.useYearly&&p.growthYears&&isFinite(+p.growthYears[t-1]))?+p.growthYears[t-1]:base)/100, prev=rev; rev=rev*(1+g);
     const ebit=rev*p.ebit/100, nopat=ebit*(1-p.tax/100);
     const da=rev*p.da/100, capex=rev*p.capex/100, dNWC=(rev-prev)*p.nwc/100;
     const fcf=nopat+da-capex-dNWC, df=1/Math.pow(1+p.wacc/100,t), pv=fcf*df;
@@ -424,7 +433,7 @@ function dcfDetail(p){
 function dcfSimple(p){
   const rows=[]; let np=p.np0, pvSum=0;
   for(let t=1;t<=10;t++){
-    const g=(t<=5?p.npg1:p.npg2)/100; np=np*(1+g);
+    const base=(t<=5?p.npg1:p.npg2), g=((p.useYearly&&p.growthYears&&isFinite(+p.growthYears[t-1]))?+p.growthYears[t-1]:base)/100; np=np*(1+g);
     const fcf=np*p.fcfconv/100, df=1/Math.pow(1+p.wacc/100,t), pv=fcf*df;
     pvSum+=pv; rows.push({t,g:g*100,c1:np,fcf,pv});
   }
@@ -470,7 +479,7 @@ function impliedKe(){
 function impliedGrowth(){
   if(!baseValid()||!mktValid()) return NaN;
   const key = MODE==='detail' ? 'g1' : 'npg1';
-  const f=x=>compute({[key]:x}).perShare - S.price;   // 增速越高→价值越高（单调递增）
+  const f=x=>compute({[key]:x, useYearly:false}).perShare - S.price;   // 求"等效两段增速"，临时关逐年
   let lo=-50, hi=100;
   if(f(lo)>0) return -Infinity;    // 即便 -50% 仍高于现价
   if(f(hi)<0) return Infinity;     // 即便 +100% 仍低于现价
@@ -569,6 +578,25 @@ async function aiQualFetch(){
   }finally{ btn.disabled=false; }
 }
 document.getElementById('aiQualBtn').addEventListener('click',aiQualFetch);
+
+// ===== 逐年增速（手动覆盖两段）=====
+function curStageGrowth(t){ return MODE==='detail' ? (t<=5?S.g1:S.g2) : (t<=5?S.npg1:S.npg2); }
+function fillYearly(){ S.growthYears = Array.from({length:10}, (_,i)=>curStageGrowth(i+1)); }
+function buildYearlyGrid(){
+  const el=document.getElementById('yearlyGrid'); if(!el) return;
+  if(!S.growthYears) fillYearly();
+  el.innerHTML = S.growthYears.map((v,i)=>'<div style="text-align:center"><div style="font-size:10px;color:var(--muted);margin-bottom:1px">Y'+(i+1)+'</div>'+
+    '<input data-yi="'+i+'" type="number" step="0.5" value="'+(+v).toFixed(1)+'" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:4px 2px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums"></div>').join('');
+  el.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',()=>{ const i=+inp.dataset.yi, v=parseFloat(inp.value); if(!isNaN(v)){ S.growthYears[i]=v; recalc(); } }));
+}
+document.getElementById('useYearly').addEventListener('change', e=>{
+  S.useYearly=e.target.checked;
+  if(S.useYearly && !S.growthYears) fillYearly();
+  document.getElementById('yearlyGrid').classList.toggle('hide', !S.useYearly);
+  if(S.useYearly) buildYearlyGrid();
+  recalc();
+});
+document.getElementById('fillYearly').addEventListener('click', ()=>{ fillYearly(); buildYearlyGrid(); recalc(); });
 
 // 三视角「量化初筛」：随加载股票实时更新（ROE=PB/PE、估值、隐含折现率），定性维度交给用户
 function renderGuru(){
