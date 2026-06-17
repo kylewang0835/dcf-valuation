@@ -1,0 +1,10 @@
+{
+  "name": "dcf-valuation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Stock DCF valuation tool with AI qualitative scoring backend (Vercel)",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.2"
+  }
+}

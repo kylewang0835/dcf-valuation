@@ -1,0 +1,5 @@
+{
+  "functions": {
+    "api/qual.js": { "maxDuration": 60 }
+  }
+}

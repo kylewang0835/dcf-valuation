@@ -287,10 +287,18 @@
 
         <h3>② 本股票量化初筛：<span id="guruStockName">—</span> <span style="color:var(--muted);font-weight:400;font-size:11px">随加载股票实时更新</span></h3>
         <div id="guruDynamic"></div>
-        <p style="color:var(--muted);font-size:11px;line-height:1.7;margin-top:8px"><b>量化只能初筛</b>「好价格」(估值) 与「好生意」里可量化的 <b>ROE/资本回报</b> 维度。<b>护城河、定价权、管理层资本配置、企业文化、商业模式差异化</b>等定性维度工具无法自动判断——需你补充，或像下面联通那样做深度研究。<b>不构成投资建议。</b></p>
+        <p style="color:var(--muted);font-size:11px;line-height:1.7;margin-top:8px"><b>量化只能初筛</b>「好价格」(估值) 与「好生意」里可量化的 <b>ROE/资本回报</b> 维度。<b>护城河、定价权、管理层资本配置、企业文化、商业模式差异化</b>等定性维度工具无法自动判断——请用下方 <b>③ 定性评分卡</b> 补充。<b>不构成投资建议。</b></p>
+
+        <h3>③ 定性评分卡 <span style="color:var(--muted);font-weight:400;font-size:11px">AI 联网研究自动打分（任意股票）/ 你也可手动覆盖 → 合并量化生成三视角结论、建议安全边际（按股票记忆）</span></h3>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <button id="aiQualBtn" style="background:#8b5cf6;border:none;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600">🤖 AI 定性评分（联网研究当前股票）</button>
+          <span id="aiQualStatus" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+        <div id="qualCard"></div>
+        <div id="qualVerdict"></div>
 
         <div id="guruCaseUnicom" style="display:none">
-        <h3>③ 深度研究案例：中国联通 0762.HK <span style="color:var(--muted);font-weight:400;font-size:11px">（仅加载联通 00762 时显示）</span></h3>
+        <h3>④ 深度研究案例：中国联通 0762.HK <span style="color:var(--muted);font-weight:400;font-size:11px">（仅加载联通 00762 时显示）</span></h3>
         <div class="key">核心命门只有一个数字：<b>ROIC ≈ 4.3% ＜ 资本成本 ≈ 6%</b> —— 每投一块钱在毁灭经济价值；ROE ≈ 6%，三强最弱（移动 8.3% ＞ 电信 7.3% ＞ 联通 5.8%）。这正是它十年困在 PB≈0.5、被当作“价值陷阱”的根因。</div>
         <div class="tbl-wrap"><table>
           <thead><tr><th style="width:60px"></th><th>好生意</th><th>好公司</th><th>好价格</th><th>会买?</th></tr></thead>
@@ -344,7 +352,8 @@ const DEFAULTS = {
   // 决策
   mos:25
 };
-let S = {...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36};
+function defaultQual(){ return {moat:1,pricing:1,model:1,light:1,mgmt:1,capital:1,culture:1,minority:1}; }
+let S = {...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36, qual:defaultQual()};
 let MODE = 'detail';
 
 const cur = ()=>CUR[S.market]||CUR.A;
@@ -387,9 +396,9 @@ document.getElementById('mDetail').addEventListener('click',()=>setMode('detail'
 document.getElementById('mSimple').addEventListener('click',()=>setMode('simple'));
 
 document.getElementById('reset').addEventListener('click',()=>{
-  S={...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36};
+  S={...DEFAULTS, code:'600600', name:'青岛啤酒', market:'A', netprofit:4588, pb:2.36, qual:loadQual('600600')||defaultQual()};
   document.getElementById('codeInput').value='600600';
-  setHeader(); syncAll(); setMode('detail');
+  setHeader(); syncAll(); syncQualCard(); setMode('detail');
   document.getElementById('fetchStatus').textContent='已恢复青啤默认假设';
 });
 
@@ -476,6 +485,91 @@ function updateNetcashHint(){
     hn.innerHTML='已计入净现金 '+big(S.netcash)+'（'+(S.netcash>0?'净现金':'净负债')+'）。接口不提供，请核对年报。';
   }
 }
+
+// ===== 定性评分卡（AI 联网研究自动打分 + 手动覆盖，按股票记忆）=====
+const QUAL_DIMS = [
+  {id:'moat',    grp:'biz', label:'护城河', opts:['无','窄','宽'], hint:'网络效应/转换成本/品牌/牌照/规模'},
+  {id:'pricing', grp:'biz', label:'定价权', opts:['弱','中','强'], hint:'能否不流失客户而涨价'},
+  {id:'model',   grp:'biz', label:'商业模式差异化', opts:['同质化','一般','强'], hint:'vs 价格战'},
+  {id:'light',   grp:'biz', label:'轻资本', opts:['重资本','中','轻'], hint:'再投资需求低'},
+  {id:'mgmt',    grp:'co',  label:'管理层诚信与能力', opts:['差','中','优'], hint:''},
+  {id:'capital', grp:'co',  label:'资本配置', opts:['差','中','优'], hint:'低于内在价值回购/明智分红'},
+  {id:'culture', grp:'co',  label:'企业文化·长期主义', opts:['弱','中','强'], hint:''},
+  {id:'minority',grp:'co',  label:'善待小股东', opts:['差','中','优'], hint:''},
+];
+function saveQual(){ try{ localStorage.setItem('dcfqual:'+S.code, JSON.stringify(S.qual)); }catch(e){} }
+function loadQual(code){ try{ const v=localStorage.getItem('dcfqual:'+code); return v?JSON.parse(v):null; }catch(e){} return null; }
+function buildQualCard(){
+  const el=document.getElementById('qualCard'); if(!el) return;
+  const grp=(g,title)=>'<div style="font-size:11px;color:var(--accent);font-weight:700;margin:2px 0 6px">'+title+'</div>'+
+    QUAL_DIMS.filter(d=>d.grp===g).map(d=>{ const v=(S.qual&&S.qual[d.id])||0;
+      return '<div class="qrow" data-qid="'+d.id+'" style="margin:8px 0">'+
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px"><span>'+d.label+
+        (d.hint?' <span style="color:var(--muted);font-size:10.5px">'+d.hint+'</span>':'')+'</span>'+
+        '<span class="qlab" style="color:var(--accent2);font-weight:600">'+d.opts[v]+'</span></div>'+
+        '<input type="range" min="0" max="2" step="1" value="'+v+'" style="width:100%;accent-color:var(--accent2);margin-top:2px"></div>';
+    }).join('');
+  el.innerHTML='<div class="grid2" style="gap:16px"><div>'+grp('biz','好生意（生意质量）')+'</div><div>'+grp('co','好公司（管理/文化）')+'</div></div>';
+  el.querySelectorAll('.qrow').forEach(row=>{
+    const id=row.dataset.qid, inp=row.querySelector('input'), lab=row.querySelector('.qlab'), d=QUAL_DIMS.find(x=>x.id===id);
+    inp.addEventListener('input',()=>{ S.qual[id]=+inp.value; lab.textContent=d.opts[+inp.value]; if(S.qual)S.qual._ai=false; saveQual(); updateQualVerdict(); });
+  });
+}
+function syncQualCard(){
+  const el=document.getElementById('qualCard'); if(!el) return;
+  el.querySelectorAll('.qrow').forEach(row=>{ const id=row.dataset.qid, d=QUAL_DIMS.find(x=>x.id===id), v=(S.qual&&S.qual[id])||0;
+    row.querySelector('input').value=v; row.querySelector('.qlab').textContent=d.opts[v];
+    row.title=(S.qual&&S.qual._reasons&&S.qual._reasons[id])||''; });
+}
+function qScore(){ const q=S.qual||{}; return { biz:(q.moat||0)+(q.pricing||0)+(q.model||0)+(q.light||0), co:(q.mgmt||0)+(q.capital||0)+(q.culture||0)+(q.minority||0) }; }
+function adoptMos(v){ S.mos=v; const c=document.querySelector('[data-id=mos]'); if(c){ c.querySelector('input[type=range]').value=v; c.querySelector('.val').textContent=(+v).toFixed(1)+'%'; } recalc(); }
+function updateQualVerdict(){
+  const el=document.getElementById('qualVerdict'); if(!el) return;
+  const sc=qScore(), biz=sc.biz, co=sc.co;
+  let roe=NaN; if(baseValid()&&mktValid()){ const mc=S.price*S.shares, pe=(S.netprofit>0)?mc/S.netprofit:NaN; if(S.pb>0&&pe>0) roe=S.pb/pe*100; }
+  const bizLab=biz>=6?'宽护城河好生意':(biz>=3?'有一定护城河':'无护城河/平庸'), coLab=co>=6?'优秀公司':(co>=3?'合格':'存疑');
+  const bizC=biz>=6?'#22c55e':(biz>=3?'#f59e0b':'#ef4444'), coC=co>=6?'#22c55e':(co>=3?'#f59e0b':'#ef4444');
+  const hiRoe=!isNaN(roe)&&roe>=12, loRoe=!isNaN(roe)&&roe<8, hiMoat=biz>=6, loMoat=biz<=2;
+  let combo;
+  if(hiRoe&&hiMoat) combo='<b style="color:#22c55e">✓ 真·好生意</b>：高资本回报'+(isNaN(roe)?'':'(ROE '+roe.toFixed(0)+'%)')+' + 宽护城河，三人三关皆过';
+  else if(hiRoe&&loMoat) combo='<b style="color:#f59e0b">⚠ 高回报但护城河存疑</b>：ROE 漂亮但无护城河 → 回报恐难持续';
+  else if(loRoe&&hiMoat) combo='<b style="color:#f59e0b">⚠ 有护城河但当前回报低</b>：困境/周期或尚未变现';
+  else if(loRoe&&loMoat) combo='<b style="color:#ef4444">✗ 平庸生意</b>：低回报 + 无护城河，便宜也难救';
+  else combo='中性：资本回报与护城河均一般，取决于增长可持续性';
+  const sugMos=Math.round(Math.max(15,Math.min(45,45-(biz+co)/16*25)));
+  const src=(S.qual&&S.qual._ai)?'<span style="color:#8b5cf6">🤖 AI 研究</span>':'<span style="color:var(--muted)">你的打分</span>';
+  el.innerHTML='<div class="tbl-wrap" style="margin-top:8px"><table><tbody>'+
+    '<tr><td style="width:110px"><b>好生意定性</b></td><td>'+biz+'/8 · <b style="color:'+bizC+'">'+bizLab+'</b>　'+src+'</td></tr>'+
+    '<tr><td><b>好公司定性</b></td><td>'+co+'/8 · <b style="color:'+coC+'">'+coLab+'</b></td></tr>'+
+    '<tr><td><b>综合·好生意</b></td><td style="white-space:normal">'+combo+'</td></tr>'+
+    '<tr><td><b>质量 → 建议MOS</b></td><td>'+sugMos+'%（当前 '+(S.mos||0).toFixed(0)+'%）<a onclick="adoptMos('+sugMos+')" style="color:var(--accent2);cursor:pointer;margin-left:8px">采用</a></td></tr>'+
+    '<tr><td colspan="2" style="color:var(--muted);font-size:11px;text-align:left;white-space:normal">三人侧重：巴菲特＝护城河+定价权+资本配置；芒格＝invert“什么会毁掉它”+ROE 6%vs18% 尺子；段永平＝商业模式差异化+企业文化。'+((S.qual&&S.qual._summary)?'<br>🤖 '+S.qual._summary:'')+'</td></tr>'+
+    '</tbody></table></div>';
+}
+// 后端地址：留空=同源 /api/qual（部署在 Vercel 时即可用）；GitHub Pages 前端调 Vercel 后端时，填你的 Vercel 域名，如 'https://your-app.vercel.app'
+const QUAL_API='';
+async function aiQualFetch(){
+  const st=document.getElementById('aiQualStatus'), btn=document.getElementById('aiQualBtn');
+  if(!baseValid()||!mktValid()){ st.style.color='var(--down)'; st.textContent='请先加载一只有效股票'; return; }
+  btn.disabled=true; st.style.color='var(--muted)'; st.textContent='🤖 AI 联网研究中…（约 20–60 秒，请稍候）';
+  try{
+    const mc=S.price*S.shares, pe=(S.netprofit>0)?mc/S.netprofit:NaN, roe=(S.pb>0&&pe>0)?S.pb/pe*100:NaN;
+    const body={ code:S.code, name:S.name, market:({A:'A股',HK:'港股',US:'美股'}[S.market]||S.market),
+      context:{ price:S.price, currency:cur().code, pe:isFinite(pe)?+pe.toFixed(1):null, pb:S.pb>0?+S.pb.toFixed(2):null, roe:isFinite(roe)?+roe.toFixed(1):null, netcashM:S.netcash } };
+    const r=await fetch((QUAL_API||'')+'/api/qual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok){ const t=await r.text().catch(()=>''); throw new Error('HTTP '+r.status+(t?' '+t.slice(0,140):'')); }
+    const data=await r.json(); const s=data.scores||{};
+    QUAL_DIMS.forEach(d=>{ if(typeof s[d.id]==='number') S.qual[d.id]=Math.max(0,Math.min(2,Math.round(s[d.id]))); });
+    S.qual._ai=true; S.qual._reasons=data.reasons||{}; S.qual._summary=data.summary||'';
+    saveQual(); syncQualCard(); updateQualVerdict();
+    st.style.color='var(--up)'; st.textContent='✓ AI 已评分（'+S.name+'）— 可手动微调，结果已记忆';
+  }catch(err){
+    st.style.color='var(--down)';
+    st.innerHTML='✗ '+err.message+'　<span style="color:var(--muted)">后端未部署/不可用时，可手动拖动滑块打分。</span>';
+  }finally{ btn.disabled=false; }
+}
+document.getElementById('aiQualBtn').addEventListener('click',aiQualFetch);
+
 // 三视角「量化初筛」：随加载股票实时更新（ROE=PB/PE、估值、隐含折现率），定性维度交给用户
 function renderGuru(){
   const el=document.getElementById('guruDynamic'); if(!el) return;
@@ -516,7 +610,7 @@ function renderGuru(){
     <p style="font-size:12px;line-height:1.7;margin-top:8px">${synth}</p>`;
 }
 function recalc(){
-  updateNetcashHint(); renderGuru();
+  updateNetcashHint(); renderGuru(); updateQualVerdict();
   if(!baseValid()||!mktValid()){ renderInvalid(); return; }   // 脏数据/缺失 → 不输出估值
   const r=compute({}), ps=r.perShare, price=S.price;
   const upside=(ps/price-1)*100, mcapNow=price*S.shares;
@@ -741,6 +835,7 @@ async function fetchData(){
     const npTTM = Q.peTTM>0 ? Q.mktcapM/Q.peTTM : NaN;
     S.np0=npTTM; S.netprofit=npTTM;
     S.name=Q.name||tk.code; S.pb=Q.pb;
+    S.qual=loadQual(S.code)||defaultQual(); syncQualCard();
 
     let extra='', detail=false;
     if(tk.market==='A' && Q.source==='东财'){
@@ -788,7 +883,7 @@ async function fetchData(){
 document.getElementById('fetchBtn').addEventListener('click',fetchData);
 document.getElementById('codeInput').addEventListener('keydown',e=>{ if(e.key==='Enter') fetchData(); });
 
-setHeader(); setMode('detail');
+setHeader(); S.qual=loadQual(S.code)||defaultQual(); buildQualCard(); setMode('detail');
 </script>
 </body>
 </html>
