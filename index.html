@@ -593,6 +593,36 @@ document.getElementById('useYearly').addEventListener('change', e=>{
 });
 document.getElementById('fillYearly').addEventListener('click', ()=>{ fillYearly(); buildYearlyGrid(); recalc(); });
 
+// ===== 机构一致预期增速（自动填充）=====
+// 经后端 /api/forecast 抓东财盈利预测（仅 A 股有覆盖）。无后端→返回 null，静默降级为默认两段/手填。
+async function fetchConsensusGrowth(market, code, np0){
+  const url=(QUAL_API||'')+'/api/forecast?market='+encodeURIComponent(market)+'&code='+encodeURIComponent(code)+((isFinite(np0)&&np0>0)?'&np0='+np0:'');
+  const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),8000);
+  try{
+    const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(to);
+    if(!r.ok) return null;
+    const j=await r.json();
+    if(!j||!j.available||!Array.isArray(j.years)||!j.years.length) return null;
+    return j;
+  }catch(e){ clearTimeout(to); return null; }
+}
+// 把一致预期的逐年增速填进 10 年网格：预测年(通常 Y1–Y3)用一致预期，其后线性衰减到永续增速 gt
+function applyConsensusGrowth(years){
+  const n=Math.min(years.length,10), gv=new Array(10);
+  for(let i=0;i<10;i++){
+    if(i<n){ gv[i]=clamp(+years[i].growth, -40, 80); }
+    else{ const last=clamp(+years[n-1].growth,-40,80), frac=(i-n+1)/(10-n); gv[i]=+(last+(S.gt-last)*frac).toFixed(1); }
+  }
+  S.growthYears=gv; S.useYearly=true;
+  const cb=document.getElementById('useYearly'); if(cb) cb.checked=true;
+  const grid=document.getElementById('yearlyGrid'); if(grid) grid.classList.remove('hide');
+  // 两段增速也对齐（供反向 DCF / 关闭逐年时回退使用）：Y1–5 段均值、Y6–10 段均值
+  const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+  const s1=+mean(gv.slice(0,5)).toFixed(1), s2=+mean(gv.slice(5)).toFixed(1);
+  S.g1=s1; S.g2=s2; S.npg1=s1; S.npg2=s2;
+  syncAll(); buildYearlyGrid(); recalc();
+}
+
 // 三视角「量化初筛」：随加载股票实时更新（ROE=PB/PE、估值、隐含折现率），定性维度交给用户
 function renderGuru(){
   const el=document.getElementById('guruDynamic'); if(!el) return;
@@ -935,15 +965,26 @@ async function fetchData(){
     try{ const nc=await fetchNetCash(S.market, S.code); if(nc && isFinite(nc.netcashM)){ S.netcashEst=nc.netcashM; S.netcash=nc.netcashM; } }catch(e){}
     setHeader(); syncAll(); setMode(detail?'detail':'simple');
 
+    // 机构一致预期增速：自动抓取并填充逐年增速网格（仅 A 股有覆盖；无后端则静默跳过）
+    let consTag='', consApplied=false;
+    if(baseValid()){
+      try{
+        const cg=await fetchConsensusGrowth(S.market, S.code, S.np0);
+        if(cg){ applyConsensusGrowth(cg.years); consApplied=true;
+          consTag=' · <span style="color:var(--accent2)">增速按机构一致预期填充（'+cg.years.map(y=>y.year+y.mark).join('/')+'，其后渐降至永续）</span>'; }
+      }catch(e){}
+    }
+
     const when=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
     const mk={A:'A股',HK:'港股',US:'美股'}[S.market];
     const srcTag = Q.source==='腾讯' ? ' · <span style="color:var(--accent2)">数据源:腾讯(备用)</span>' : '';
     const ncTag = S.netcash ? ' · 净现金 '+big(S.netcash)+'（已计入）' : (S.netcashEst!=null ? ' · 净现金估 '+big(S.netcashEst)+'（参考·见左）' : '');
-    const manualWarn = (S.netcashEst!=null) ? '⚠ 增长率/折旧/资本开支 请自行设定' : '⚠ 增长率/折旧/资本开支/净现金 请自行设定或手填';
+    const gw = consApplied ? '折旧/资本开支' : '增长率/折旧/资本开支';
+    const manualWarn = (S.netcashEst!=null) ? ('⚠ '+gw+' 请自行设定') : ('⚠ '+gw+'/净现金 请自行设定或手填');
     if(baseValid()){
       st.style.color='var(--up)';
       st.innerHTML='✓ '+S.name+' '+S.code+'（'+mk+'/'+cur().code+'） · 价 '+S.price.toFixed(2)+' '+cur().sym+
-        ' · 归母 '+(S.netprofit>0?big(S.netprofit):'—')+extra+ncTag+srcTag+' · '+when+
+        ' · 归母 '+(S.netprofit>0?big(S.netprofit):'—')+extra+ncTag+srcTag+consTag+' · '+when+
         ' &nbsp;<span style="color:var(--warn)">'+manualWarn+'</span>';
     }else{
       st.style.color='var(--warn)';

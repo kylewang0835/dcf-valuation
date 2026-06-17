@@ -1,5 +1,6 @@
 {
   "functions": {
-    "api/qual.js": { "maxDuration": 60 }
+    "api/qual.js": { "maxDuration": 60 },
+    "api/forecast.js": { "maxDuration": 15 }
   }
 }
