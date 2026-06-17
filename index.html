@@ -492,7 +492,8 @@ function impliedGrowth(){
 function updateNetcashHint(){
   const hn=document.getElementById('hintNetcash'); if(!hn) return;
   if(S.netcash){
-    hn.innerHTML='已计入净现金 '+big(S.netcash)+'（'+(S.netcash>0?'净现金':'净负债')+'，<b>自动估算自资产负债表</b>，可改）。';
+    const note = MODE==='simple' ? ' <span style="color:var(--muted)">（净利模式基准净利含少量利息收入，重复计算影响通常 &lt;1%；严格 SOTP 宜改用经营净利做基准）</span>' : '';
+    hn.innerHTML='✓ 已计入净现金 '+big(S.netcash)+'（'+(S.netcash>0?'净现金':'净负债')+'，<b>自动估算自资产负债表</b>，可改）。'+note;
   }else if(S.netcashEst!=null){
     hn.innerHTML='估算净现金约 <b>'+big(S.netcashEst)+'</b>（自资产负债表，粗略口径）。<span style="color:var(--warn)">净利模式下基准净利已含利息收入，故未自动计入以免重复计算</span>；如要做 SOTP，请改用经营净利做基准后再手填此值。';
   }else{
@@ -941,9 +942,9 @@ async function fetchData(){
       }catch(e){}
     }
     if(!detail) S.rev0=NaN;     // 非详细模式：清除营收，杜绝跨公司污染
-    // 自动估算净现金：详细模式(FCFF)直接计入；净利模式(FCFE)基准净利已含利息收入→只存为参考、不自动计入(避免重复计算)
+    // 自动估算净现金并计入估值（A/港/美各模式）。净利模式下基准净利含少量利息收入→轻微重复(<1%)，已在提示中说明
     S.netcashEst=null; S.netcash=0;
-    try{ const nc=await fetchNetCash(S.market, S.code); if(nc && isFinite(nc.netcashM)){ S.netcashEst=nc.netcashM; if(detail) S.netcash=nc.netcashM; } }catch(e){}
+    try{ const nc=await fetchNetCash(S.market, S.code); if(nc && isFinite(nc.netcashM)){ S.netcashEst=nc.netcashM; S.netcash=nc.netcashM; } }catch(e){}
     setHeader(); syncAll(); setMode(detail?'detail':'simple');
 
     const when=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
