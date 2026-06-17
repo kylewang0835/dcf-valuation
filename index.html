@@ -865,20 +865,36 @@ async function fetchNetCash(market, code){
     }
     if(market==='HK'){
       const r=await jsonp('https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_HKF10_FN_BALANCE'+
-        '&columns=REPORT_DATE,ITEM_NAME,AMOUNT,CURRENCY&filter=(SECUCODE%3D%22'+code.padStart(5,'0')+'.HK%22)'+
+        '&columns=REPORT_DATE,STD_ITEM_CODE,ITEM_NAME,AMOUNT,CURRENCY&filter=(SECUCODE%3D%22'+code.padStart(5,'0')+'.HK%22)'+
         '&pageSize=90&sortColumns=REPORT_DATE&sortTypes=-1','callback');
       const rows=(r&&r.result&&r.result.data)||[]; if(!rows.length) return null;
       const d0=rows[0].REPORT_DATE, curc=rows[0].CURRENCY||'';
       let cash=0, debt=0;
-      rows.filter(x=>x.REPORT_DATE===d0).forEach(x=>{ const nm=x.ITEM_NAME||'', a=num(x.AMOUNT);
+      rows.filter(x=>x.REPORT_DATE===d0 && !String(x.STD_ITEM_CODE||'').endsWith('999')).forEach(x=>{ const nm=x.ITEM_NAME||'', a=num(x.AMOUNT);
         if(/现金|存款|货币/.test(nm) && !/受限/.test(nm)) cash+=a;            // 现金类（剔除受限）
         if(/借款|贷款|应付债券|应付票据|融资租赁/.test(nm)) debt+=a;          // 有息负债
       });
       const fx=/人民币|CNY|RMB/.test(curc)?1.08:1;   // 报表币种(常为人民币)→港元，模型按港元
       return { netcashM:(cash-debt)/1e6*fx, period:(d0||'').slice(0,10) };
     }
+    if(market==='US'){
+      const u=code.toUpperCase();
+      for(const suf of ['.O','.N','.A']){   // 纳指/纽交所/美交所
+        const r=await jsonp('https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_USF10_FN_BALANCE'+
+          '&columns=REPORT_DATE,STD_ITEM_CODE,ITEM_NAME,AMOUNT&filter=(SECUCODE%3D%22'+u+suf+'%22)'+
+          '&pageSize=80&sortColumns=REPORT_DATE&sortTypes=-1','callback');
+        const rows=(r&&r.result&&r.result.data)||[]; if(!rows.length) continue;
+        const d0=rows[0].REPORT_DATE; let cash=0, debt=0;
+        rows.filter(x=>x.REPORT_DATE===d0 && !String(x.STD_ITEM_CODE||'').endsWith('999')).forEach(x=>{ const nm=x.ITEM_NAME||'', a=num(x.AMOUNT);
+          if(/现金|存款|货币|有价证券|证券投资/.test(nm)) cash+=a;            // 现金+有价证券(美股证券属现金类)
+          if(/短期债务|长期负债|应付票据|借款|债券|借贷/.test(nm)) debt+=a;   // 有息负债
+        });
+        return { netcashM:(cash-debt)/1e6, period:(d0||'').slice(0,10) };   // 美元，无需换汇
+      }
+      return null;
+    }
   }catch(e){}
-  return null; // 美股暂不支持自动
+  return null;
 }
 
 async function fetchData(){
