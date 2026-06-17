@@ -551,7 +551,7 @@ const QUAL_API='';
 async function aiQualFetch(){
   const st=document.getElementById('aiQualStatus'), btn=document.getElementById('aiQualBtn');
   if(!baseValid()||!mktValid()){ st.style.color='var(--down)'; st.textContent='请先加载一只有效股票'; return; }
-  btn.disabled=true; st.style.color='var(--muted)'; st.textContent='🤖 AI 联网研究中…（约 20–60 秒，请稍候）';
+  btn.disabled=true; st.style.color='var(--muted)'; st.textContent='🤖 AI 研究中…（约 5–20 秒，请稍候）';
   try{
     const mc=S.price*S.shares, pe=(S.netprofit>0)?mc/S.netprofit:NaN, roe=(S.pb>0&&pe>0)?S.pb/pe*100:NaN;
     const body={ code:S.code, name:S.name, market:({A:'A股',HK:'港股',US:'美股'}[S.market]||S.market),

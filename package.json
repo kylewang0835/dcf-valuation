@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Stock DCF valuation tool with AI qualitative scoring backend (Vercel)",
+  "description": "Stock DCF valuation tool with AI qualitative scoring backend (Vercel, OpenAI-compatible)",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.104.2"
+    "openai": "^6.43.0"
   }
 }
