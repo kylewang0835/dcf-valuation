@@ -245,10 +245,10 @@
         <h2>说明</h2>
         <div class="footnote">
           <b>两种模式</b>：① 营收驱动（FCFF）= EBIT×(1−税率)+折旧−资本开支−营运资本变动，按 WACC 折现后 +净现金；适合 A 股（营收可自动获取）。
-          ② 净利驱动（FCFE）= 归母净利×增长×(FCF/净利转换率)，按 WACC（视作股权成本）折现直接得股权价值；A/港/美通用，基准净利 = 总市值÷PE(TTM)，自动按交易货币计。<br>
+          ② 净利驱动（FCFE）= 归母净利×增长×(FCF/净利转换率)，按 WACC（视作股权成本）折现<b>直接得股权价值</b>；A/港/美通用，基准净利 = 总市值÷PE(TTM)，自动按交易货币计。<br>
           <b>多市场</b>：输入代码/名称后用东方财富搜索接口解析市场与 secid；A 股人民币、港股港元、美股美元，估值与股价同币种，结果即该币种每股价值。<br>
           <b>需手填项</b>（标 <span class="fetched">✱</span>）：折旧摊销、资本开支、净现金——接口无法稳定获取，请按目标公司最新年报核对。<br>
-          <b>重复计算提示</b>：净利驱动模式下基准净利已含利息/投资收益，若再单独填正的净现金会重复计算，故默认 0。<br>
+          <b>净现金的正确口径（关键）</b>：「+净现金」桥接只属于 <b>FCFF/企业价值</b>路径（营收驱动），正负皆减/加。<b>净利驱动（FCFE）折现所得本身已是股权价值</b>，债务利息已扣在盈利里——故<b>净负债不再二次扣减</b>（否则把债务算两遍，如可口可乐会被多砍约一个净负债的量），仅把<b>正的超额现金</b>加一次（闲置现金收益几乎不进盈利）；此时基准净利含的少量利息收入会带来 &lt;1% 的轻微重复。<br>
           仅供分析与教学，<b>不构成投资建议</b>。DCF 对 WACC 与永续增速高度敏感，请结合敏感性矩阵综合判断。
         </div>
       </div>
@@ -407,7 +407,7 @@ function dcfDetail(p){
     const fcf=nopat+da-capex-dNWC, df=1/Math.pow(1+p.wacc/100,t), pv=fcf*df;
     pvSum+=pv; rows.push({t,g:g*100,c1:rev,c2:ebit,c3:nopat,c4:da,c5:capex,c6:dNWC,fcf,pv});
   }
-  return finish(rows,pvSum,p);
+  return finish(rows,pvSum,p,false);   // FCFF：ev=企业价值，需 +净现金 桥接到股权
 }
 function dcfSimple(p){
   const rows=[]; let np=p.np0, pvSum=0;
@@ -416,13 +416,18 @@ function dcfSimple(p){
     const fcf=np*p.fcfconv/100, df=1/Math.pow(1+p.wacc/100,t), pv=fcf*df;
     pvSum+=pv; rows.push({t,g:g*100,c1:np,fcf,pv});
   }
-  return finish(rows,pvSum,p);
+  return finish(rows,pvSum,p,true);    // FCFE：按 Ke 折现、净利已扣息，ev 本身即股权价值
 }
-function finish(rows,pvSum,p){
+function finish(rows,pvSum,p,isFCFE){
   const last=rows[9], w=p.wacc/100, gt=p.gt/100, df10=1/Math.pow(1+w,10);
   const pvTV = w>gt ? last.fcf*(1+gt)/(w-gt)*df10 : 0;
-  const ev=pvSum+pvTV, equity=ev+p.netcash, perShare=equity/p.shares;
-  return {rows,pvSum,pvTV,ev,equity,perShare};
+  const ev=pvSum+pvTV;
+  // FCFF(详细)：ev=企业价值，桥接 +净现金/−净债务 → 股权价值（两种符号都正确）。
+  // FCFE(净利)：ev 按 Ke 折现、净利已扣息 → 本身即股权价值；净负债已反映在盈利中，不再二次扣减
+  //   （否则把债务负担算两遍）；仅把“正的超额现金”加一次（闲置现金的收益几乎不在盈利里）。
+  const ncApplied = isFCFE ? Math.max(0, p.netcash) : p.netcash;
+  const equity=ev+ncApplied, perShare=equity/p.shares;
+  return {rows,pvSum,pvTV,ev,equity,perShare,ncApplied,isFCFE};
 }
 const compute = p => (MODE==='detail'?dcfDetail:dcfSimple)({...S,...p});
 const perShareFor=(wacc,gt)=>compute({wacc,gt}).perShare;
@@ -468,8 +473,13 @@ function impliedGrowth(){
 function updateNetcashHint(){
   const hn=document.getElementById('hintNetcash'); if(!hn) return;
   if(S.netcash){
-    const note = MODE==='simple' ? ' <span style="color:var(--muted)">（净利模式基准净利含少量利息收入，重复计算影响通常 &lt;1%；严格 SOTP 宜改用经营净利做基准）</span>' : '';
-    hn.innerHTML='✓ 已计入净现金 '+big(S.netcash)+'（'+(S.netcash>0?'净现金':'净负债')+'，<b>自动估算自资产负债表</b>，可改）。'+note;
+    if(MODE==='simple' && S.netcash<0){
+      // FCFE 净负债：不二次扣减
+      hn.innerHTML='ℹ 检出<b>净负债 '+big(S.netcash)+'</b>（自资产负债表）。<span style="color:var(--warn)">净利驱动模式下债务利息已扣在盈利里，故<b>不再二次扣减</b>本金，以免重复计算</span>——折现所得已是股权价值。若想做企业价值口径，请切到「营收驱动·FCFF」。';
+    }else{
+      const note = MODE==='simple' ? ' <span style="color:var(--muted)">（仅把正的超额现金加一次；基准净利含少量利息收入，重复影响通常 &lt;1%）</span>' : '';
+      hn.innerHTML='✓ 已计入净现金 '+big(S.netcash)+'（'+(S.netcash>0?'净现金':'净负债')+'，<b>自动估算自资产负债表</b>，可改）。'+note;
+    }
   }else if(S.netcashEst!=null){
     hn.innerHTML='估算净现金约 <b>'+big(S.netcashEst)+'</b>（自资产负债表，粗略口径）。<span style="color:var(--warn)">净利模式下基准净利已含利息收入，故未自动计入以免重复计算</span>；如要做 SOTP，请改用经营净利做基准后再手填此值。';
   }else{
@@ -697,18 +707,22 @@ function recalc(){
     '<span><b>'+S.name+'</b> 内在价值 <b>'+ps.toFixed(2)+' '+cur().sym+'</b> vs 当前 <b>'+price.toFixed(2)+
     ' '+cur().sym+'</b>，'+(upside>=0?'高出':'低于')+' <b>'+Math.abs(upside).toFixed(1)+'%</b>。</span>';
 
-  const tot=r.equity>0?r.equity:1;
-  const parts=[{v:r.pvSum,c:'#3b82f6',n:'显式期'},{v:r.pvTV,c:'#8b5cf6',n:'终值'},{v:S.netcash,c:'#22c55e',n:'净现金'}];
+  const tot=r.equity>0?r.equity:1, ncA=r.ncApplied;
+  const parts=[{v:r.pvSum,c:'#3b82f6',n:'显式期'},{v:r.pvTV,c:'#8b5cf6',n:'终值'},{v:Math.max(0,ncA),c:'#22c55e',n:'净现金'}];
   document.getElementById('evBar').innerHTML=parts.map(p=>{
     const w=Math.max(0,p.v/tot*100);
     return '<div style="width:'+w+'%;background:'+p.c+'">'+(w>9?p.n+' '+w.toFixed(0)+'%':'')+'</div>';
   }).join('');
 
+  // FCFE 模式且为净负债：仅作参考行展示，不二次扣减（已在盈利中反映）；其余情况照常 +净现金桥接
+  const ncRow = (r.isFCFE && S.netcash<0)
+    ? `<tr><td>净负债（参考）</td><td style="color:var(--muted)">${big(S.netcash)}</td><td style="color:var(--muted)">已含于盈利，未二次扣减</td></tr>`
+    : `<tr><td>+ 净现金</td><td>${big(ncA)}</td><td>${(ncA/r.equity*100).toFixed(1)}%</td></tr>`;
   document.getElementById('evTable').innerHTML=`
     <tr><td>显式期现值</td><td>${big(r.pvSum)}</td><td>${(r.pvSum/r.equity*100).toFixed(1)}%</td></tr>
     <tr><td>终值现值</td><td>${big(r.pvTV)}</td><td>${(r.pvTV/r.equity*100).toFixed(1)}%</td></tr>
-    <tr><td>${MODE==='detail'?'企业价值 (EV)':'经营现值小计'}</td><td>${big(r.ev)}</td><td>–</td></tr>
-    <tr><td>+ 净现金</td><td>${big(S.netcash)}</td><td>${(S.netcash/r.equity*100).toFixed(1)}%</td></tr>
+    <tr><td>${MODE==='detail'?'企业价值 (EV)':'经营现值小计（已是股权口径）'}</td><td>${big(r.ev)}</td><td>–</td></tr>
+    ${ncRow}
     <tr style="font-weight:700;border-top:2px solid var(--line)"><td>股权价值</td><td>${big(r.equity)}</td><td>100%</td></tr>`;
 
   // projection
@@ -997,7 +1011,9 @@ async function fetchData(){
     const when=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
     const mk={A:'A股',HK:'港股',US:'美股'}[S.market];
     const srcTag = Q.source==='腾讯' ? ' · <span style="color:var(--accent2)">数据源:腾讯(备用)</span>' : '';
-    const ncTag = S.netcash ? ' · 净现金 '+big(S.netcash)+'（已计入）' : (S.netcashEst!=null ? ' · 净现金估 '+big(S.netcashEst)+'（参考·见左）' : '');
+    // FCFE(净利驱动)模式遇净负债：不二次扣减，标注「未扣减」而非「已计入」
+    const ncNetDebtFCFE = (MODE==='simple' && S.netcash<0);
+    const ncTag = S.netcash ? ' · '+(S.netcash<0?'净负债':'净现金')+' '+big(S.netcash)+'（'+(ncNetDebtFCFE?'已含于盈利·未二次扣减':'已计入')+'）' : (S.netcashEst!=null ? ' · 净现金估 '+big(S.netcashEst)+'（参考·见左）' : '');
     const gw = consApplied ? '折旧/资本开支' : '增长率/折旧/资本开支';
     const manualWarn = (S.netcashEst!=null) ? ('⚠ '+gw+' 请自行设定') : ('⚠ '+gw+'/净现金 请自行设定或手填');
     if(baseValid()){
