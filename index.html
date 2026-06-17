@@ -714,8 +714,9 @@ async function txQuote(market,code){
   if(!price) throw new Error('腾讯无行情');
   const mktcapM=mcapYi*100;               // 亿→百万
   const nm=(a[1]||'').replace(/\s+/g,'');  // charset=gbk 已正确解码中文名
-  let pb = market==='A' ? +a[46] : NaN;  // gtimg 仅 A 股 PB(a[46])可靠；港美股 PB 由东财 f167 提供
-  if(!(pb>0)) pb=NaN;
+  // gtimg PB 字段位置按市场不同(实测校准)：A股 a[46]、港股 a[58]、美股 a[51]
+  let pb = market==='A' ? +a[46] : market==='HK' ? +a[58] : market==='US' ? +a[51] : NaN;
+  if(!(pb>0 && pb<200)) pb=NaN;   // 范围校验，拒绝脏值
   return {price, shares:mktcapM/price, mktcapM, peTTM:pe>0?pe:0, pb, name:/[一-龥A-Za-z]/.test(nm)?nm:'', source:'腾讯'};
 }
 
